@@ -1,0 +1,44 @@
+[smoke] Extension imlplcjlhgpajopdbpbngiadkcmdbgob, daemon port 34955, temp /tmp/bmcp-smoke-sJoPqJ
+[smoke] ✓ an old 0.1.x server gets the update message
+[smoke] ✓ no extension: NO_EXTENSION_MESSAGE
+[smoke] ✓ pairing: the tool asks for Allow with the popup's code
+[smoke] ✓ goto http://127.0.0.1:40933/form
+✓ fill getByLabel('Customer name')
+✓ fill getByLabel('Telephone')
+✓ fill getByLabel('E-mail address')
+✓ check getByLabel('Medium')
+✓ check getByLabel('Bacon')
+✓ check getByLabel('Mushroom')
+✓ fill getByLabel('Delivery instructions')
+✓ click getByRole('button', { name: 'Submit order' })
+✓ get text body --max 1500
+Thanks, order received
+{"custname":"Jane Doe","custtel":"555-0100","custemail":"jane@example.com","size":"medium","topping":["bacon","mushroom"],"comments":"Ring twice"}
+Page: http://127.0.0.1:40933/post — "Order received"
+[smoke] ✓ the form flow in one call, under 600 characters
+[smoke] ✓ agents' tabs: a background tab in the app's named, colored group, and the badge
+[smoke] ✓ reads: snapshot -i, find, get, eval, screenshot, console, requests
+[smoke] ✓ tabs: list, new, select, close
+[smoke] ✓ a click at 125% zoom
+[smoke] ✓ pages that open tabs: target=_blank and window.open
+[smoke] ✓ another extension's iframe on the page
+[smoke] ✓ another extension's iframe in a closed shadow root on the page
+[smoke] ✓ another extension's iframe that comes back when removed
+[smoke] ✓ uploads and screenshot paths, relative to the MCP root or absolute
+[smoke] ✓ a service worker restart
+[smoke] ✓ pdf and download, saved under the MCP root
+[smoke] ✓ two AI apps, each with its own group in its own color
+[smoke] ✓ the daemon restarting mid-session
+[smoke] ✓ Stop and Resume in the popup
+[smoke] ✓ tab list
+  1073374725 [Chromium] "about:blank" — about:blank
+  1073374730 [Chromium] "Quarterly files" — http://127.0.0.1:40933/files (active)
+* 1073374750 [Chromium] "Second page" — http://127.0.0.1:40933/second (yours)
+  1073374732 [Chromium] "Popup page" — http://127.0.0.1:40933/popup
+  1073374749 [Chromium] "Second page" — http://127.0.0.1:40933/second
+  981373718 [Chromium 2] "about:blank" — about:blank
+  981373721 [Chromium 2] "Second page" — http://127.0.0.1:40933/second?profile=2 (active)
+Several browsers are connected; your new tabs open in Chromium. `browser list`, `browser use "<name>"` and `tab new --browser "<name>"` choose where
+[smoke] ✓ a second Chrome profile: tab list shows both, tab select across them
+[smoke] ✓ a different daemon key asks again
+[smoke] 20/20 passed; screenshots in /tmp/smoke-go-final

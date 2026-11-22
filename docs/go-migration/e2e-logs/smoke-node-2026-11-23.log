@@ -1,0 +1,73 @@
+$ wxt build --mode development && pnpm --filter @browsermcp/mcp build && node scripts/smoke-browser-control.ts
+
+WXT 0.21.5
+ℹ Building chrome-mv3 for development with Vite 8.3.5
+[?25l⠋ Preparing...[K⠋ [1/3] background[K⠙ [1/3] background[K⠙ [2/3] frames[K⠙ [3/3] popup[K⠹ [3/3] popup[K⠸ [3/3] popup[K⠼ [3/3] popup[K⠴ [3/3] popup[K[K[?25h[K[?25h✔ Built extension in 529 ms
+  ├─ .output/chrome-mv3-dev/manifest.json              1.35 kB  
+  ├─ .output/chrome-mv3-dev/popup.html                 464 B    
+  ├─ .output/chrome-mv3-dev/background.js              42.58 kB 
+  ├─ .output/chrome-mv3-dev/chunks/popup-DzFUZJn2.js   451.00 kB
+  ├─ .output/chrome-mv3-dev/content-scripts/frames.js  4.50 kB  
+  ├─ .output/chrome-mv3-dev/assets/popup-BuvMob2Y.css  15.63 kB 
+  ├─ .output/chrome-mv3-dev/icons/128.png              2.76 kB  
+  ├─ .output/chrome-mv3-dev/icons/16.png               438 B    
+  ├─ .output/chrome-mv3-dev/icons/32.png               769 B    
+  └─ .output/chrome-mv3-dev/icons/48.png               1.13 kB  
+Σ Total size: 520.64 kB                              
+✔ Finished in 691 ms
+$ tsup && shx chmod +x dist/index.js
+CLI Building entry: {"index":"src/index.ts","daemon":"src/daemon/main.ts"}
+CLI Using tsconfig: tsconfig.json
+CLI tsup v8.5.1
+CLI Using tsup config: /home/ntbankey/mcp/packages/mcp/tsup.config.ts
+CLI Target: node20
+CLI Cleaning output folder
+ESM Build start
+ESM dist/index.js          13.03 KB
+ESM dist/chunk-ZSD4H45J.js 11.48 KB
+ESM dist/daemon.js         193.97 KB
+ESM ⚡️ Build success in 27ms
+[smoke] Extension imlplcjlhgpajopdbpbngiadkcmdbgob, daemon port 43021, temp /tmp/bmcp-smoke-52kgrk
+[smoke] ✓ an old 0.1.x server gets the update message
+[smoke] ✓ no extension: NO_EXTENSION_MESSAGE
+[smoke] ✓ pairing: the tool asks for Allow with the popup's code
+[smoke] ✓ goto http://127.0.0.1:39727/form
+✓ fill getByLabel('Customer name')
+✓ fill getByLabel('Telephone')
+✓ fill getByLabel('E-mail address')
+✓ check getByLabel('Medium')
+✓ check getByLabel('Bacon')
+✓ check getByLabel('Mushroom')
+✓ fill getByLabel('Delivery instructions')
+✓ click getByRole('button', { name: 'Submit order' })
+✓ get text body --max 1500
+Thanks, order received
+{"custname":"Jane Doe","custtel":"555-0100","custemail":"jane@example.com","size":"medium","topping":["bacon","mushroom"],"comments":"Ring twice"}
+Page: http://127.0.0.1:39727/post — "Order received"
+[smoke] ✓ the form flow in one call, under 600 characters
+[smoke] ✓ agents' tabs: a background tab in the app's named, colored group, and the badge
+[smoke] ✓ reads: snapshot -i, find, get, eval, screenshot, console, requests
+[smoke] ✓ tabs: list, new, select, close
+[smoke] ✓ a click at 125% zoom
+[smoke] ✓ pages that open tabs: target=_blank and window.open
+[smoke] ✓ another extension's iframe on the page
+[smoke] ✓ another extension's iframe in a closed shadow root on the page
+[smoke] ✓ another extension's iframe that comes back when removed
+[smoke] ✓ uploads and screenshot paths, relative to the MCP root or absolute
+[smoke] ✓ a service worker restart
+[smoke] ✓ pdf and download, saved under the MCP root
+[smoke] ✓ two AI apps, each with its own group in its own color
+[smoke] ✓ the daemon restarting mid-session
+[smoke] ✓ Stop and Resume in the popup
+[smoke] ✓ tab list
+  729300456 [Chromium] "about:blank" — about:blank
+  729300461 [Chromium] "Quarterly files" — http://127.0.0.1:39727/files (active)
+* 729300481 [Chromium] "Second page" — http://127.0.0.1:39727/second (yours)
+  729300463 [Chromium] "Popup page" — http://127.0.0.1:39727/popup
+  729300480 [Chromium] "Second page" — http://127.0.0.1:39727/second
+  482343980 [Chromium 2] "about:blank" — about:blank
+  482343983 [Chromium 2] "Second page" — http://127.0.0.1:39727/second?profile=2 (active)
+Several browsers are connected; your new tabs open in Chromium. `browser list`, `browser use "<name>"` and `tab new --browser "<name>"` choose where
+[smoke] ✓ a second Chrome profile: tab list shows both, tab select across them
+[smoke] ✓ a different daemon key asks again
+[smoke] 20/20 passed; screenshots in /home/ntbankey/mcp/apps/extension/.output/smoke

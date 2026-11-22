@@ -99,6 +99,9 @@ Go (config, proxy, relay security, and two end-to-end tests):
 pnpm --filter @browsermcp/mcp go:test   # go test -race ./...
 ```
 
+A real browser/extension smoke test passes 20/20 with both daemons; see
+[`e2e-smoke-report.md`](e2e-smoke-report.md).
+
 The end-to-end tests require built artifacts:
 
 1. `TestFrontDoorWithNodeWorker` starts the Go front door in-process, which
@@ -121,16 +124,16 @@ pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/dist/browsermcpd
 
 ## Security review
 
-| Control                     | Front door                                               | Worker                              |
-| --------------------------- | -------------------------------------------------------- | ----------------------------------- |
-| Loopback bind               | `127.0.0.1` only                                         | `127.0.0.1` only                    |
-| Host header / DNS rebinding | checked before every request                             | checked                             |
-| Token on `/client`          | constant-time compare                                    | worker token, internal only         |
-| Token on `/shutdown`        | constant-time compare, no Origin                         | `POST /shutdown`                    |
-| Extension Origin            | `chrome-extension://` + allowlist                        | its own allowlist + dev IDs         |
-| `/cdp`                      | **404** (not exposed)                                    | internal Playwright connection only |
-| Payload cap                 | 256 MB                                                   | 256 MB                              |
-| Idle exit                   | front door owns it; worker started with `--no-idle-exit` | disabled by the front door          |
+| Control                     | Front door                                                                         | Worker                                                 |
+| --------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Loopback bind               | `127.0.0.1` only                                                                   | `127.0.0.1` only                                       |
+| Host header / DNS rebinding | checked before every request                                                       | checked                                                |
+| Token on `/client`          | constant-time compare                                                              | worker token, internal only                            |
+| Token on `/shutdown`        | constant-time compare, no Origin                                                   | `POST /shutdown`                                       |
+| Extension Origin            | `chrome-extension://` + allowlist                                                  | its own allowlist + dev IDs                            |
+| `/cdp`                      | **404** (not exposed)                                                              | internal Playwright connection only                    |
+| Payload cap                 | 256 MB                                                                             | 256 MB                                                 |
+| Idle exit                   | front door owns it; on Linux the worker also gets `Pdeathsig` and `--no-idle-exit` | elsewhere the worker keeps its idle exit as a fallback |
 
 The front door does not weaken any extension-enforced rule: pairing, incognito,
 Stop, browser pages, file access and tab restrictions are still enforced by the
@@ -138,6 +141,9 @@ extension and the worker.
 
 ## Limitations and rollback
 
+- **Abrupt front-door death:** on Linux the worker gets `Pdeathsig` and dies with
+  the front door, including on `SIGKILL`; on macOS/Windows it keeps its own
+  10-minute idle exit as a fallback.
 - The engine is still TypeScript/Playwright. A full Go engine is a separate,
   larger project; until then, browser-time memory is higher with the hybrid.
 - The front door adds one local WebSocket hop; measured RPC latency remains
