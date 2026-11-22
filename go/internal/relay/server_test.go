@@ -338,6 +338,40 @@ func TestConcurrentClients(t *testing.T) {
 	wg.Wait()
 }
 
+func TestManyClients(t *testing.T) {
+	h := startRelay(t, &staticEngine{endpoint: newFakeWorker(t).endpoint(t)})
+	const clients = 100
+	const messages = 5
+	var wg sync.WaitGroup
+	for i := 0; i < clients; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			conn, err := dialWS(t, "ws://"+h.addr+protocol.PathClient+"?token=secret", nil)
+			if err != nil {
+				t.Errorf("client %d: %v", index, err)
+				return
+			}
+			defer conn.Close(websocket.StatusNormalClosure, "")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			for n := 0; n < messages; n++ {
+				message := fmt.Sprintf("%d-%d", index, n)
+				if err := conn.Write(ctx, websocket.MessageText, []byte(message)); err != nil {
+					t.Errorf("client %d write: %v", index, err)
+					return
+				}
+				_, data, err := conn.Read(ctx)
+				if err != nil || string(data) != message {
+					t.Errorf("client %d read = %q, %v", index, data, err)
+					return
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
 func waitFor(t *testing.T, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

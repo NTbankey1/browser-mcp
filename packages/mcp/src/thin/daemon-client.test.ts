@@ -176,6 +176,9 @@ describe("DaemonClient", () => {
     while ((await fetchStatus(port, 200)) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    // Drop the dead peer explicitly: the close event may not have fired yet,
+    // and the next call must start a new daemon rather than race the old socket.
+    thin.close();
     const second = await daemonPid(thin);
     expect(second).not.toBe(first);
     expect(await run(thin, "echo back")).toBe("back");
