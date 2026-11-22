@@ -51,6 +51,21 @@ func TestWriteReadRemoveInfo(t *testing.T) {
 	}
 }
 
+func TestPackageVersion(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"version":"9.9.9"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := PackageVersion(filepath.Join(dir, "bin", "browsermcpd"), "0.0.0")
+	if got != "9.9.9" {
+		t.Fatalf("PackageVersion = %q, want 9.9.9", got)
+	}
+	other := t.TempDir()
+	if got := PackageVersion(filepath.Join(other, "bin", "browsermcpd"), "1.2.3"); got != "1.2.3" {
+		t.Fatalf("PackageVersion fallback = %q, want 1.2.3", got)
+	}
+}
+
 func TestPortPaths(t *testing.T) {
 	home := t.TempDir()
 	if got := InfoPath(home, 0); filepath.Base(got) != "daemon.json" {

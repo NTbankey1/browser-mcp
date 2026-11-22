@@ -16,12 +16,14 @@
     "mcp-server-browsermcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup && shx chmod +x dist/index.js",
     "prepare": "npm run build",
+    "prepack": "node scripts/build-go.mjs",
     "watch": "tsup --watch",
     "test": "vitest run",
     "bench": "node bench/run.mjs",

@@ -47,8 +47,8 @@ program
               fileURLToPath(
                 new URL(
                   process.platform === "win32"
-                    ? "./browsermcpd.exe"
-                    : "./browsermcpd",
+                    ? "../bin/browsermcpd.exe"
+                    : "../bin/browsermcpd",
                   import.meta.url,
                 ),
               ),

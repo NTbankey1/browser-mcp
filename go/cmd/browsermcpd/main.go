@@ -39,6 +39,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if executable, err := os.Executable(); err == nil {
+		version = config.PackageVersion(executable, version)
+	}
 	cfg := config.Config{
 		Home:           home,
 		Port:           *port,

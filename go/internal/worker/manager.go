@@ -60,11 +60,7 @@ type Manager struct {
 // New returns a manager. An empty command means `node <binary dir>/daemon.js`.
 func New(home string, publicPort int, command []string, logger *slog.Logger) *Manager {
 	if len(command) == 0 {
-		exe, err := os.Executable()
-		if err != nil {
-			exe = "."
-		}
-		command = []string{"node", filepath.Join(filepath.Dir(exe), "daemon.js")}
+		command = defaultEngineCommand()
 	}
 	return &Manager{
 		home:       home,
@@ -97,6 +93,7 @@ func (m *Manager) Ensure(ctx context.Context) (*Endpoint, error) {
 	args = append(args,
 		"--port", strconv.Itoa(port),
 		"--advertised-port", strconv.Itoa(m.publicPort),
+		"--parent-port", strconv.Itoa(m.publicPort),
 	)
 	args = append(args, keepWorkerAliveArgs()...)
 	cmd := exec.Command(args[0], args[1:]...)
@@ -173,6 +170,26 @@ func (m *Manager) stopLocked() {
 		}
 	}
 	m.reset()
+}
+
+// defaultEngineCommand finds the TypeScript daemon beside the Go binary
+// (dist/browsermcpd) or one directory down in dist/ (bin/browsermcpd).
+func defaultEngineCommand() []string {
+	executable, err := os.Executable()
+	if err != nil {
+		return []string{"node", "daemon.js"}
+	}
+	dir := filepath.Dir(executable)
+	candidates := []string{
+		filepath.Join(dir, "daemon.js"),
+		filepath.Join(dir, "..", "dist", "daemon.js"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return []string{"node", candidate}
+		}
+	}
+	return []string{"node", filepath.Join(dir, "..", "dist", "daemon.js")}
 }
 
 func (m *Manager) alive() bool {

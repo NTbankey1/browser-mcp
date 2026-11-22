@@ -8,7 +8,7 @@ const packageJson = JSON.parse(
   fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"),
 );
 const binary = process.platform === "win32" ? "browsermcpd.exe" : "browsermcpd";
-const output = path.join(packageRoot, "dist", binary);
+const output = path.join(packageRoot, "bin", binary);
 
 fs.mkdirSync(path.dirname(output), { recursive: true });
 execFileSync(
