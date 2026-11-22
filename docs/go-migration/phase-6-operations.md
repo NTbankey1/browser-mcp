@@ -62,7 +62,7 @@ as before. `BROWSER_MCP_GO_DAEMON` is optional when the binary sits next to
 ```sh
 pnpm install
 pnpm typecheck && pnpm lint && pnpm format
-pnpm test                    # TypeScript: 194 passed, 7 skipped
+pnpm test                    # mcp 194 passed (7 skipped); extension-core 101; extension 1
 pnpm build
 pnpm --filter @browsermcp/mcp go:build
 pnpm go:test                 # Go: go test -race ./...
