@@ -26,12 +26,18 @@ export async function runDaemon(options: {
       (value) => Number.parseInt(value, 10),
     )
     .option("--no-idle-exit", "never exit when idle")
+    .option(
+      "--parent-port <port>",
+      "the Go front door's port: exit if it disappears",
+      (value) => Number.parseInt(value, 10),
+    )
     .parse(options.argv);
-  const { port, stderr, advertisedPort, idleExit } = command.opts<{
+  const { port, stderr, advertisedPort, idleExit, parentPort } = command.opts<{
     port?: number;
     stderr?: boolean;
     advertisedPort?: number;
     idleExit?: boolean;
+    parentPort?: number;
   }>();
 
   const home = browserMcpHome();
@@ -47,6 +53,7 @@ export async function runDaemon(options: {
       home,
       port,
       advertisedPort,
+      parentPort,
       version: options.version,
       createEngine: options.createEngine,
       idleExitMs: idleExit === false ? 0 : options.idleExitMs,

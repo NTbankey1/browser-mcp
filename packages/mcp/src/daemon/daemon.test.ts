@@ -159,6 +159,35 @@ describe("startDaemon", () => {
     expect(await extension.verifyWelcome()).toBe(true);
   });
 
+  it("stops when the front door disappears", async () => {
+    const port = await freePort();
+    const parent = http.createServer((request, response) => {
+      if (request.url === "/browsermcp/status") {
+        response.setHeader("Content-Type", "application/json");
+        response.end(
+          JSON.stringify({
+            product: "browsermcp",
+            version: "2.0.0",
+            protocol: 1,
+            minProtocol: 1,
+            pid: process.pid,
+          }),
+        );
+        return;
+      }
+      response.writeHead(404).end();
+    });
+    await new Promise<void>((resolve) =>
+      parent.listen(0, "127.0.0.1", resolve),
+    );
+    const parentPort = (parent.address() as net.AddressInfo).port;
+    const daemon = await start({ port, parentPort, parentCheckMs: 20 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise<void>((resolve) => parent.close(() => resolve()));
+    await expect(daemon.stopped).resolves.toBe("front door gone");
+    expect(readDaemonInfo(daemonInfoPath(home, port))).toBeNull();
+  });
+
   it("does not exit when idleExitMs is 0", async () => {
     const port = await freePort();
     await start({ port, idleExitMs: 0 });

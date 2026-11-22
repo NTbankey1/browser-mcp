@@ -232,6 +232,23 @@ func (s *Server) handleClient(w http.ResponseWriter, r *http.Request) {
 			s.opts.OnClientClose()
 		}
 	}()
+
+	// The thin process sends `hello` first. Read it here so extension IDs a
+	// running client adds (BROWSER_MCP_EXTENSION_IDS in its hello) reach this
+	// front door's allowlist, as they do in the Node daemon, then forward it.
+	firstContext, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	typ, data, err := client.Read(firstContext)
+	cancel()
+	if err != nil {
+		_ = client.Close(websocket.StatusPolicyViolation, "Expected hello")
+		return
+	}
+	s.noteClientHello(data)
+	if err := upstream.Write(r.Context(), typ, data); err != nil {
+		_ = client.Close(websocket.StatusInternalError, "engine unavailable")
+		return
+	}
+
 	_ = proxy.Pipe(r.Context(), client, upstream)
 }
 
@@ -269,6 +286,23 @@ func (s *Server) untrack(conn *websocket.Conn) {
 	s.mu.Lock()
 	delete(s.conns, conn)
 	s.mu.Unlock()
+}
+
+func (s *Server) noteClientHello(data []byte) {
+	var hello struct {
+		Type         string   `json:"type"`
+		ExtensionIDs []string `json:"extensionIds"`
+	}
+	if json.Unmarshal(data, &hello) != nil || hello.Type != "hello" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range hello.ExtensionIDs {
+		if validExtensionID(id) {
+			s.extension[id] = struct{}{}
+		}
+	}
 }
 
 func (s *Server) allowedExtension(origin string) bool {

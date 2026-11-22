@@ -235,6 +235,50 @@ func TestExtensionOrigin(t *testing.T) {
 	}
 }
 
+func TestClientHelloExtensionIDsAreAllowed(t *testing.T) {
+	t.Setenv("BROWSER_MCP_EXTENSION_IDS", "")
+	fake := newFakeWorker(t)
+	h := startRelay(t, &staticEngine{endpoint: fake.endpoint(t)})
+	const devID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	client, err := dialWS(t, "ws://"+h.addr+protocol.PathClient+"?token=secret", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close(websocket.StatusNormalClosure, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	hello, err := json.Marshal(map[string]any{
+		"type":         "hello",
+		"protocol":     1,
+		"extensionIds": []string{devID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Write(ctx, websocket.MessageText, hello); err != nil {
+		t.Fatal(err)
+	}
+	// The fake worker echoes the hello once the front door forwards it.
+	if _, _, err := client.Read(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	extension, err := dialWS(t, "ws://"+h.addr+protocol.PathExtension,
+		http.Header{"Origin": {"chrome-extension://" + devID}})
+	if err != nil {
+		t.Fatalf("extension with a hello-provided ID was rejected: %v", err)
+	}
+	defer extension.Close(websocket.StatusNormalClosure, "")
+	if err := extension.Write(ctx, websocket.MessageText, []byte("hi")); err != nil {
+		t.Fatal(err)
+	}
+	_, data, err := extension.Read(ctx)
+	if err != nil || string(data) != "hi" {
+		t.Fatalf("extension read = %q, %v", data, err)
+	}
+}
+
 func TestShutdown(t *testing.T) {
 	h := startRelay(t, &staticEngine{endpoint: newFakeWorker(t).endpoint(t)})
 	response, err := http.Post("http://"+h.addr+protocol.PathShutdown+"?token=secret", "", nil)

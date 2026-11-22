@@ -56,6 +56,10 @@ export type DaemonOptions = {
   log: Logger;
   /** Exits this long after the last session leaves (10 minutes) */
   idleExitMs?: number;
+  /** The front door's port, when a Go front door starts this daemon: the worker exits if it disappears */
+  parentPort?: number;
+  /** How often to check the front door (15 s) */
+  parentCheckMs?: number;
   extensionIds?: readonly string[];
   /** How long one `tools/call` may run (`TOOL_CALL_TIMEOUT_MS`) */
   toolCallTimeoutMs?: number;
@@ -111,6 +115,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   });
   const engine = options.createEngine({ backend, log });
   let idleTimer: NodeJS.Timeout | undefined;
+  let parentFailures = 0;
   let stopping: Promise<void> | null = null;
   let resolveStopped: (reason: string) => void = () => {};
   const stopped = new Promise<string>((resolve) => (resolveStopped = resolve));
@@ -128,6 +133,31 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     }, idleExitMs);
     idleTimer.unref?.();
   };
+
+  // A Go front door owns idle exit and, on Linux, gets Pdeathsig. Elsewhere
+  // (and if Pdeathsig is unavailable) the worker checks the front door's
+  // /status and exits after two misses, so it cannot outlive the front door.
+  const parentTimer = options.parentPort
+    ? setInterval(() => {
+        if (stopping) {
+          return;
+        }
+        void fetchStatus(options.parentPort!, 500).then((status) => {
+          if (stopping) {
+            return;
+          }
+          if (status) {
+            parentFailures = 0;
+            return;
+          }
+          parentFailures++;
+          if (parentFailures >= 2) {
+            void stop("front door gone");
+          }
+        });
+      }, options.parentCheckMs ?? 15_000)
+    : undefined;
+  parentTimer?.unref?.();
 
   const onClient = (ws: WebSocket) => {
     const timeout = setTimeout(() => ws.close(1008, "Expected hello"), 10_000);
@@ -262,6 +292,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     stopping ??= (async () => {
       log(`Stopping: ${reason}`);
       clearTimeout(idleTimer);
+      clearInterval(parentTimer);
       removeDaemonInfo(infoFile);
       for (const ws of sessions.values()) {
         ws.close(4003, "The daemon is exiting");
