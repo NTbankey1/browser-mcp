@@ -146,7 +146,13 @@ not committed.
 - `--max` in `find`, `get` and `snapshot` help now says it caps characters, not
   matches.
 - A screenshot timeout now suggests expanding a collapsed tab group or bringing
-  the tab forward.
+  the tab forward, and the extension expands an app's collapsed group when a new
+  agent tab joins it.
+- Optional `BROWSER_MCP_PREWARM_BROWSER=1` connects Playwright as soon as a
+  browser pairs; the first real Brave call dropped from ~2.3 s to ~1.1 s (warm
+  ~1.0 s).
+- A 100-client relay test covers concurrent clients; CI runs Go unit tests and
+  builds on macOS and Windows in addition to Linux.
 
 ## Real Brave profile demo
 

@@ -63,7 +63,7 @@ as before. `BROWSER_MCP_GO_DAEMON` is optional when the binary is in the package
 ```sh
 pnpm install
 pnpm typecheck && pnpm lint && pnpm format
-pnpm test                    # mcp 195 passed (7 skipped); extension-core 101; extension 1
+pnpm test                    # mcp 196 passed (7 skipped); extension-core 102; extension 1
 pnpm build
 pnpm --filter @browsermcp/mcp go:build
 pnpm go:test                 # Go: go test -race ./...
@@ -87,7 +87,8 @@ keep it warm:
 ```json
 "env": {
   "BROWSER_MCP_IDLE_EXIT_MS": "0",
-  "BROWSER_MCP_PRELOAD_PLAYWRIGHT": "1"
+  "BROWSER_MCP_PRELOAD_PLAYWRIGHT": "1",
+  "BROWSER_MCP_PREWARM_BROWSER": "1"
 }
 ```
 
@@ -106,7 +107,9 @@ daemon overhead, not Chrome rendering, so it would not make pages load faster.
 
 `BROWSER_MCP_PRELOAD_PLAYWRIGHT=1` raises idle RSS to ~139 MB (Playwright and
 the engine loaded at startup). Use `BROWSER_MCP_IDLE_EXIT_MS=0` to avoid paying
-the daemon/Playwright start on every idle restart.
+the daemon/Playwright start on every idle restart. `BROWSER_MCP_PREWARM_BROWSER=1`
+connects Playwright as soon as a browser pairs, removing the ~1.2 s first-call
+browser connection from the user's first action.
 
 For the best browser-side performance, use a **clean Brave profile** with only
 Browser MCP, close agent tab groups after use, and avoid other extensions that
@@ -175,8 +178,9 @@ No extension changes are needed; the extension protocol is unchanged.
 - **Hybrid memory:** while the Node worker is resident, the process tree costs
   more than the Node daemon alone (~91 MB vs ~71 MB in the benchmark). The Go
   front door wins startup and idle cost, not browser-time memory.
-- **First-call latency:** the worker starts on the first client or extension
-  connection (~90 ms in the benchmark).
+- **First-call latency:** with prewarm the first browser call is ~1.1 s (vs
+  ~2.3 s without it); page load and Playwright's browser connection still
+  dominate.
 - **Packaging:** the binary is built locally into `bin/` and reads the package
   version at startup, but signing and shipping binaries for all npm platforms is
   not implemented.
@@ -186,3 +190,5 @@ No extension changes are needed; the extension protocol is unchanged.
 - **Transport:** the extension must use TCP loopback WebSockets; Unix domain
   sockets are not available to browser extensions. The front door keeps TCP for
   client compatibility.
+- **Platform coverage:** CI runs Go unit tests and builds on Linux, macOS and
+  Windows; the full browser smoke and the integration tests remain Linux-only.

@@ -53,6 +53,8 @@ export type RelayBackendOptions = Omit<
   unknownTabWaitMs?: number;
   /** How many browsers are connected at once; one more is refused with `anotherBrowser`. Default: `MAX_BROWSERS` */
   maxBrowsers?: number;
+  /** Connect Playwright as soon as a browser pairs, so the first tool call does not pay it */
+  prewarmBrowser?: boolean;
 };
 
 type Listeners = {
@@ -300,6 +302,17 @@ export class RelayBackend implements BrowserBackend {
     }
     for (const tab of state.tabs) {
       this.publicId(slot, tab.tabId);
+    }
+    if (
+      this.options.prewarmBrowser &&
+      slot.connection === connection &&
+      slot.usable
+    ) {
+      void slot
+        .browser()
+        .catch((error) =>
+          this.options.log("Couldn't prewarm the browser:", error),
+        );
     }
     return slot;
   }

@@ -112,6 +112,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     daemonVersion: options.version,
     identity,
     log,
+    prewarmBrowser: process.env.BROWSER_MCP_PREWARM_BROWSER === "1",
   });
   const engine = options.createEngine({ backend, log });
   let idleTimer: NodeJS.Timeout | undefined;
