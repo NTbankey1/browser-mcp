@@ -5,6 +5,17 @@ import { DaemonAlreadyRunningError, startDaemon } from "@/daemon/daemon";
 import { createFileLogger } from "@/daemon/log";
 import { browserMcpHome, daemonLogPath, ensureHome } from "@/daemon/paths";
 
+/** `BROWSER_MCP_IDLE_EXIT_MS`: keep the daemon warm longer (or `0` forever) for faster first calls */
+export function idleExitMsFromEnv(
+  value = process.env.BROWSER_MCP_IDLE_EXIT_MS,
+): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 /**
  * The daemon process's entry: `node dist/daemon.js [--port <port>]`, started detached by a thin process. Logs to `~/.browsermcp/daemon.log` (and stderr with `--stderr`, for running it by hand)
  */
@@ -56,7 +67,8 @@ export async function runDaemon(options: {
       parentPort,
       version: options.version,
       createEngine: options.createEngine,
-      idleExitMs: idleExit === false ? 0 : options.idleExitMs,
+      idleExitMs:
+        idleExit === false ? 0 : (options.idleExitMs ?? idleExitMsFromEnv()),
       log,
     });
     for (const signal of ["SIGINT", "SIGTERM"] as const) {

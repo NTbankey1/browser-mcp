@@ -79,6 +79,39 @@ pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/bin/browsermcpd --runs
 The Go integration tests skip when `dist/index.js` or `bin/browsermcpd` is
 missing; build first for full coverage.
 
+## Performance (daily use)
+
+For the fastest daily setup use the **Node daemon**, not the Go front door, and
+keep it warm:
+
+```json
+"env": {
+  "BROWSER_MCP_IDLE_EXIT_MS": "0",
+  "BROWSER_MCP_PRELOAD_PLAYWRIGHT": "1"
+}
+```
+
+Measured on the real Brave profile (2026-11-23, warm daemon):
+
+| Action                                                          |       Time |
+| --------------------------------------------------------------- | ---------: |
+| `goto https://example.com` + `snapshot -i` + `get title` (warm) | **0.87 s** |
+| The same first call after a daemon/extension reconnect          |     ~2.3 s |
+| Local demo: fill, upload, click, screenshot, PDF, download      |      3.1 s |
+| Hacker News: `snapshot -i` + `find` + `requests`                |     1.65 s |
+
+The daemon and RPC layers are sub-millisecond. Page load, rendering, network and
+Playwright's first browser connection dominate. A native Go engine would remove
+daemon overhead, not Chrome rendering, so it would not make pages load faster.
+
+`BROWSER_MCP_PRELOAD_PLAYWRIGHT=1` raises idle RSS to ~139 MB (Playwright and
+the engine loaded at startup). Use `BROWSER_MCP_IDLE_EXIT_MS=0` to avoid paying
+the daemon/Playwright start on every idle restart.
+
+For the best browser-side performance, use a **clean Brave profile** with only
+Browser MCP, close agent tab groups after use, and avoid other extensions that
+inject CSS or rewrite `document.title` into pages you automate.
+
 ## Files and logs
 
 With `BROWSER_MCP_HOME=~/.browsermcp` (or the temp directory you chose):
