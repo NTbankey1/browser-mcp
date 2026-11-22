@@ -1,0 +1,230 @@
+{
+  "generatedAt": "2026-11-22T19:18:52.220Z",
+  "daemon": {
+    "version": "2.5.0",
+    "commit": "9658da4",
+    "path": "/home/ntbankey/mcp/packages/mcp/dist/browsermcpd"
+  },
+  "node": "v26.13.1",
+  "platform": "linux x64",
+  "runs": 5,
+  "summary": {
+    "startupMs": 19.44,
+    "rssAtReadyMB": 10,
+    "rssAfter10sMB": 10,
+    "rssAfterRpcMB": 14.9,
+    "rssAfterRpcTreeMB": 91,
+    "cpuAfter10sSec": 0,
+    "httpP50Ms": 0.12,
+    "httpP95Ms": 0.28,
+    "wsOpenMs": 0.68,
+    "wsWelcomeMs": 90.16,
+    "toolsListP50Ms": 0.11,
+    "toolsListP95Ms": 0.21,
+    "toolsCallHelpP50Ms": 0.15,
+    "toolsCallHelpP95Ms": 0.28,
+    "toolsListConcurrent50Ms": 2
+  },
+  "results": [
+    {
+      "startupMs": 27.73,
+      "rssAtReadyMB": 10.3,
+      "rssAfter10sMB": 10.3,
+      "rssAfterRpcMB": 14.9,
+      "rssAfterRpcTreeMB": 91.1,
+      "cpuAtReadySec": 0,
+      "cpuAfter10sSec": 0,
+      "http": {
+        "status": {
+          "n": 500,
+          "avg": 0.22,
+          "p50": 0.17,
+          "p95": 0.37,
+          "max": 2.48
+        },
+        "concurrent50Ms": 17.7
+      },
+      "ws": {
+        "openMs": 3.05,
+        "welcomeMs": 90.16
+      },
+      "rpc": {
+        "toolsList": {
+          "n": 200,
+          "avg": 0.15,
+          "p50": 0.12,
+          "p95": 0.29,
+          "max": 1.89
+        },
+        "toolsCallHelp": {
+          "n": 100,
+          "avg": 0.19,
+          "p50": 0.16,
+          "p95": 0.28,
+          "max": 1.76
+        },
+        "toolsListConcurrent50Ms": 1.5
+      }
+    },
+    {
+      "startupMs": 16.86,
+      "rssAtReadyMB": 10,
+      "rssAfter10sMB": 10,
+      "rssAfterRpcMB": 14.5,
+      "rssAfterRpcTreeMB": 90.7,
+      "cpuAtReadySec": 0,
+      "cpuAfter10sSec": 0,
+      "http": {
+        "status": {
+          "n": 500,
+          "avg": 0.17,
+          "p50": 0.12,
+          "p95": 0.41,
+          "max": 2.2
+        },
+        "concurrent50Ms": 9.1
+      },
+      "ws": {
+        "openMs": 0.68,
+        "welcomeMs": 97.51
+      },
+      "rpc": {
+        "toolsList": {
+          "n": 200,
+          "avg": 0.12,
+          "p50": 0.1,
+          "p95": 0.21,
+          "max": 0.6
+        },
+        "toolsCallHelp": {
+          "n": 100,
+          "avg": 0.19,
+          "p50": 0.15,
+          "p95": 0.25,
+          "max": 1.86
+        },
+        "toolsListConcurrent50Ms": 1.6
+      }
+    },
+    {
+      "startupMs": 17.36,
+      "rssAtReadyMB": 10,
+      "rssAfter10sMB": 10,
+      "rssAfterRpcMB": 15,
+      "rssAfterRpcTreeMB": 91,
+      "cpuAtReadySec": 0,
+      "cpuAfter10sSec": 0,
+      "http": {
+        "status": {
+          "n": 500,
+          "avg": 0.16,
+          "p50": 0.12,
+          "p95": 0.2,
+          "max": 3.78
+        },
+        "concurrent50Ms": 6.6
+      },
+      "ws": {
+        "openMs": 0.73,
+        "welcomeMs": 118.6
+      },
+      "rpc": {
+        "toolsList": {
+          "n": 200,
+          "avg": 0.13,
+          "p50": 0.11,
+          "p95": 0.22,
+          "max": 0.84
+        },
+        "toolsCallHelp": {
+          "n": 100,
+          "avg": 0.19,
+          "p50": 0.15,
+          "p95": 0.3,
+          "max": 2.04
+        },
+        "toolsListConcurrent50Ms": 2
+      }
+    },
+    {
+      "startupMs": 19.44,
+      "rssAtReadyMB": 10,
+      "rssAfter10sMB": 10,
+      "rssAfterRpcMB": 14.9,
+      "rssAfterRpcTreeMB": 91,
+      "cpuAtReadySec": 0,
+      "cpuAfter10sSec": 0,
+      "http": {
+        "status": {
+          "n": 500,
+          "avg": 0.13,
+          "p50": 0.1,
+          "p95": 0.18,
+          "max": 2.19
+        },
+        "concurrent50Ms": 6.2
+      },
+      "ws": {
+        "openMs": 0.5,
+        "welcomeMs": 88.35
+      },
+      "rpc": {
+        "toolsList": {
+          "n": 200,
+          "avg": 0.13,
+          "p50": 0.11,
+          "p95": 0.21,
+          "max": 0.79
+        },
+        "toolsCallHelp": {
+          "n": 100,
+          "avg": 0.18,
+          "p50": 0.15,
+          "p95": 0.27,
+          "max": 1.8
+        },
+        "toolsListConcurrent50Ms": 2.1
+      }
+    },
+    {
+      "startupMs": 20.05,
+      "rssAtReadyMB": 10,
+      "rssAfter10sMB": 10,
+      "rssAfterRpcMB": 14.9,
+      "rssAfterRpcTreeMB": 90.8,
+      "cpuAtReadySec": 0,
+      "cpuAfter10sSec": 0,
+      "http": {
+        "status": {
+          "n": 500,
+          "avg": 0.17,
+          "p50": 0.11,
+          "p95": 0.28,
+          "max": 7.98
+        },
+        "concurrent50Ms": 6.1
+      },
+      "ws": {
+        "openMs": 0.42,
+        "welcomeMs": 87.37
+      },
+      "rpc": {
+        "toolsList": {
+          "n": 200,
+          "avg": 0.12,
+          "p50": 0.11,
+          "p95": 0.16,
+          "max": 0.61
+        },
+        "toolsCallHelp": {
+          "n": 100,
+          "avg": 0.2,
+          "p50": 0.16,
+          "p95": 0.34,
+          "max": 2.02
+        },
+        "toolsListConcurrent50Ms": 2.1
+      }
+    }
+  ]
+}
