@@ -34,6 +34,8 @@ const option = (name, fallback) => {
 };
 const runs = Number(option("--runs", "3"));
 const jsonPath = option("--json", null);
+const binary = option("--bin", null);
+const target = binary ? path.resolve(repoRoot, binary) : daemonJs;
 
 const round = (value, digits = 2) =>
   typeof value === "number" && Number.isFinite(value)
@@ -85,6 +87,34 @@ function rssMB(pid) {
   }
 }
 
+function childPids(pid) {
+  const children = new Set();
+  try {
+    for (const task of fs.readdirSync(`/proc/${pid}/task`)) {
+      try {
+        const raw = fs
+          .readFileSync(`/proc/${pid}/task/${task}/children`, "utf8")
+          .trim();
+        for (const child of raw.split(/\s+/).filter(Boolean)) {
+          children.add(Number(child));
+        }
+      } catch {
+        // A thread may exit while we scan
+      }
+    }
+  } catch {
+    // No /proc (not Linux)
+  }
+  return [...children];
+}
+
+function treeRssMB(pid) {
+  return [pid, ...childPids(pid)].reduce(
+    (total, current) => total + (rssMB(current) ?? 0),
+    0,
+  );
+}
+
 function cpuSec(pid) {
   try {
     const fields = fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(" ");
@@ -112,11 +142,16 @@ async function runOnce(index) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "browsermcp-bench-"));
   const statusUrl = `http://127.0.0.1:${port}/browsermcp/status`;
   const started = performance.now();
-  const child = spawn(process.execPath, [daemonJs, "--port", String(port)], {
-    cwd: repoRoot,
-    env: { ...process.env, BROWSER_MCP_HOME: home },
-    stdio: ["ignore", "ignore", "pipe"],
-  });
+  const script = target.endsWith(".js") || target.endsWith(".mjs");
+  const child = spawn(
+    script ? process.execPath : target,
+    script ? [target, "--port", String(port)] : ["--port", String(port)],
+    {
+      cwd: repoRoot,
+      env: { ...process.env, BROWSER_MCP_HOME: home },
+      stdio: ["ignore", "ignore", "pipe"],
+    },
+  );
   let stderr = "";
   child.stderr.on("data", (chunk) => (stderr += chunk));
   const exited = onceExit(child);
@@ -234,10 +269,14 @@ async function runOnce(index) {
     const rpcConcurrentMs = performance.now() - rpcConcurrentStart;
 
     ws.close();
+    const rssAfterRpcMB = round(rssMB(child.pid), 1);
+    const rssAfterRpcTreeMB = round(treeRssMB(child.pid), 1);
     return {
       startupMs: round(startupMs),
       rssAtReadyMB: round(ready.rssMB, 1),
       rssAfter10sMB: round(idle.rssMB, 1),
+      rssAfterRpcMB,
+      rssAfterRpcTreeMB,
       cpuAtReadySec: round(ready.cpuSec, 3),
       cpuAfter10sSec: round(idle.cpuSec, 3),
       http: {
@@ -281,6 +320,8 @@ const summary = {
   startupMs: median(results.map((run) => run.startupMs)),
   rssAtReadyMB: median(results.map((run) => run.rssAtReadyMB)),
   rssAfter10sMB: median(results.map((run) => run.rssAfter10sMB)),
+  rssAfterRpcMB: median(results.map((run) => run.rssAfterRpcMB)),
+  rssAfterRpcTreeMB: median(results.map((run) => run.rssAfterRpcTreeMB)),
   cpuAfter10sSec: median(results.map((run) => run.cpuAfter10sSec)),
   httpP50Ms: median(results.map((run) => run.http.status?.p50)),
   httpP95Ms: median(results.map((run) => run.http.status?.p95)),
@@ -297,7 +338,7 @@ const summary = {
 
 const output = {
   generatedAt: new Date().toISOString(),
-  daemon: { version, commit },
+  daemon: { version, commit, path: target },
   node: process.version,
   platform: `${process.platform} ${process.arch}`,
   runs,

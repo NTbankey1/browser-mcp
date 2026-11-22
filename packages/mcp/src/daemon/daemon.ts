@@ -47,6 +47,8 @@ export type DaemonOptions = {
   home: string;
   /** `--port`: only this port */
   port?: number;
+  /** The port the extension dialed, when a Go front door proxies this daemon (default: the listening port) */
+  advertisedPort?: number;
   /** The ports to try in order when there's no `port` (`RELAY_PORTS`; tests pass their own) */
   ports?: readonly number[];
   version: string;
@@ -113,13 +115,17 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   let resolveStopped: (reason: string) => void = () => {};
   const stopped = new Promise<string>((resolve) => (resolveStopped = resolve));
 
+  const idleExitMs = options.idleExitMs ?? IDLE_EXIT_MS;
   const startIdleTimer = () => {
     clearTimeout(idleTimer);
+    if (idleExitMs <= 0) {
+      return;
+    }
     idleTimer = setTimeout(() => {
       if (sessions.size === 0) {
         void stop("idle");
       }
-    }, options.idleExitMs ?? IDLE_EXIT_MS);
+    }, idleExitMs);
     idleTimer.unref?.();
   };
 
@@ -226,7 +232,8 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     extensionIds: allowedExtensions,
     log,
     onRejectedExtension: (id) => backend.noteRejectedExtension(id),
-    onExtension: (ws, port) => void backend.acceptExtension(ws, port),
+    onExtension: (ws, port) =>
+      void backend.acceptExtension(ws, options.advertisedPort ?? port),
     onCdp: (ws, browserId) => backend.acceptCdp(ws, browserId),
     onClient,
     onShutdown: async () => {

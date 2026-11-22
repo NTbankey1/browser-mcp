@@ -20,8 +20,19 @@ export async function runDaemon(options: {
       Number.parseInt(value, 10),
     )
     .option("--stderr", "also log to stderr")
+    .option(
+      "--advertised-port <port>",
+      "the port the extension dialed (when a Go front door proxies this daemon)",
+      (value) => Number.parseInt(value, 10),
+    )
+    .option("--no-idle-exit", "never exit when idle")
     .parse(options.argv);
-  const { port, stderr } = command.opts<{ port?: number; stderr?: boolean }>();
+  const { port, stderr, advertisedPort, idleExit } = command.opts<{
+    port?: number;
+    stderr?: boolean;
+    advertisedPort?: number;
+    idleExit?: boolean;
+  }>();
 
   const home = browserMcpHome();
   ensureHome(home);
@@ -35,9 +46,10 @@ export async function runDaemon(options: {
     const daemon = await startDaemon({
       home,
       port,
+      advertisedPort,
       version: options.version,
       createEngine: options.createEngine,
-      idleExitMs: options.idleExitMs,
+      idleExitMs: idleExit === false ? 0 : options.idleExitMs,
       log,
     });
     for (const signal of ["SIGINT", "SIGTERM"] as const) {

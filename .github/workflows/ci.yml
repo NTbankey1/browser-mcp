@@ -41,6 +41,19 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Build the Go front door
+        run: pnpm --filter @browsermcp/mcp go:build
+
+      - name: Go tests (race detector)
+        run: go test -race ./...
+        working-directory: go
+
       # Drives the built extension through the server in headless Chromium
       - name: Smoke test
         run: pnpm smoke

@@ -54,6 +54,17 @@ AI app ──stdio──▶ thin process (dist/index.js, one per AI app)        
 - **Versions:** a thin process newer than the daemon asks it to exit (`POST /shutdown`, answered once no call is in flight) and starts its own; an older one uses the newer daemon, and while `daemon.starting.json` says a newer one is starting (for 15 s), waits for it rather than start its own. The daemon exits 10 minutes after its last session leaves; thin processes start a new one on their next call.
 - **Files:** the daemon asks the thin process to read uploads and write screenshots, PDFs and downloads. Any path on the machine works, with the permissions of the user running the AI app: `~` is the home directory, and relative paths resolve against the first of the AI app's MCP roots (its working directory when the client has none). Nothing limits which files a page-injected agent could upload, or which files `screenshot --path`, `pdf` and `download` could overwrite, so treat pages you let agents browse as able to read any file the user can read and overwrite any file the user can write.
 
+## Go front door (opt-in)
+
+`BROWSER_MCP_DAEMON=go` starts `dist/browsermcpd` instead of this package's Node
+daemon. The Go process owns the loopback port, `daemon.json`, the token, the
+Host/Origin checks and the idle exit, and proxies `/client` and `/extension` to
+the existing Node engine worker, which it starts on first use with the public
+port advertised for pairing. Every browser command still runs through the
+TypeScript engine. Build it with `pnpm --filter @browsermcp/mcp go:build`;
+`BROWSER_MCP_GO_DAEMON` overrides the binary path. Unset the variable to roll
+back. Measured startup, memory and the trade-offs: `docs/go-migration/phase-3-go-front-door.md`.
+
 ## Development
 
 - `pnpm build` builds `dist/index.js` (the `bin`) and `dist/daemon.js`; `pnpm watch` rebuilds on changes.

@@ -27,19 +27,28 @@ import {
   devExtensionIdsPath,
   identityPath,
 } from "@/daemon/paths";
+import { FakeChromium, FakeExtension } from "@/testing/fake-extension";
 import { createStubEngine } from "@/testing/stub-engine";
 
 let home: string;
 const daemons: Daemon[] = [];
 const servers: net.Server[] = [];
+const chromiums: FakeChromium[] = [];
+const extensions: FakeExtension[] = [];
 
 beforeEach(() => {
   home = mkdtempSync(path.join(tmpdir(), "browsermcp-home-"));
 });
 
 afterEach(async () => {
+  for (const extension of extensions.splice(0)) {
+    await extension.close().catch(() => {});
+  }
   for (const daemon of daemons.splice(0)) {
     await daemon.stop("test over");
+  }
+  for (const chromium of chromiums.splice(0)) {
+    await chromium.close();
   }
   for (const server of servers.splice(0)) {
     server.close();
@@ -132,6 +141,29 @@ describe("startDaemon", () => {
     await start({ port });
     // The key survives restarts, so the extension's pairing does too
     expect(statSync(identityPath(home)).mtimeMs).toBe(identity);
+  });
+
+  it("signs the advertised port when a front door proxies it", async () => {
+    const port = await freePort();
+    const advertised = await freePort();
+    await start({ port, advertisedPort: advertised });
+    const chromium = await FakeChromium.launch();
+    chromiums.push(chromium);
+    const extension = await FakeExtension.connect({ port, chromium });
+    extensions.push(extension);
+
+    // The daemon listens on `port`, but the extension dialed `advertised` in
+    // production, so the signature must name `advertised`.
+    expect(await extension.verifyWelcome()).toBe(false);
+    extension.port = advertised;
+    expect(await extension.verifyWelcome()).toBe(true);
+  });
+
+  it("does not exit when idleExitMs is 0", async () => {
+    const port = await freePort();
+    await start({ port, idleExitMs: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await fetchStatus(port)).not.toBeNull();
   });
 
   it("skips ports other programs hold, without touching them", async () => {

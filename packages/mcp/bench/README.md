@@ -39,3 +39,15 @@ Add those in `packages/mcp/src/testing/` driven workloads before claiming a Go
 engine is faster. Results depend on the machine and Node version; compare runs
 from the same environment and report the median of several runs, as this script
 does.
+
+## Measuring the Go front door
+
+```sh
+pnpm --filter @browsermcp/mcp go:build
+pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/dist/browsermcpd --runs 3
+```
+
+`--bin` accepts the built Go front door as well as the Node daemon. With the Go
+front door, `rssAtReadyMB` and `rssAfter10sMB` measure the Go process only;
+`rssAfterRpcMB` is that process, and `rssAfterRpcTreeMB` adds its Node engine
+worker, which starts on the first client connection.

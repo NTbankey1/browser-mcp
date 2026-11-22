@@ -451,3 +451,14 @@ are the real result. Checks run and passed: `pnpm lint`, `pnpm format`, `pnpm ty
 
 The daemon still loads the engine and its dependencies at startup. What remains above bare
 Node is mostly the daemon's own modules and WebSocket/MCP dependencies, not Playwright.
+
+---
+
+## Appendix D — Phase 3/4 result
+
+The opt-in Go front door is implemented and tested: see
+`docs/go-migration/phase-3-go-front-door.md`. It owns the public loopback port,
+`daemon.json`, token/Host/Origin checks and idle exit, and proxies `/client` and
+`/extension` to the TypeScript engine worker. All 28 browser commands still run
+through that worker; the engine itself remains TypeScript, and the measured
+memory trade-off is documented in the Phase 3 report.

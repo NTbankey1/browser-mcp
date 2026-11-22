@@ -8,6 +8,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "smoke": "pnpm --filter @browsermcp/extension smoke",
+    "go:build": "pnpm --filter @browsermcp/mcp go:build",
+    "go:test": "pnpm --filter @browsermcp/mcp go:test",
     "lint": "oxlint --max-warnings=0",
     "format": "oxfmt --check",
     "format:fix": "oxfmt"

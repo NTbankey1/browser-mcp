@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { program } from "commander";
+import { fileURLToPath } from "node:url";
 
 import type { Capability } from "@/contracts";
 import { runThin } from "@/thin/server";
@@ -37,7 +38,27 @@ program
       console.error(`Invalid port: ${options.port}`);
       process.exit(1);
     }
-    await runThin({ capabilities: requested as Capability[], port });
+    // BROWSER_MCP_DAEMON=go starts the Go front door instead of this package's
+    // Node daemon; BROWSER_MCP_GO_DAEMON overrides where the binary is.
+    const daemonCommand =
+      process.env.BROWSER_MCP_DAEMON === "go"
+        ? [
+            process.env.BROWSER_MCP_GO_DAEMON ??
+              fileURLToPath(
+                new URL(
+                  process.platform === "win32"
+                    ? "./browsermcpd.exe"
+                    : "./browsermcpd",
+                  import.meta.url,
+                ),
+              ),
+          ]
+        : undefined;
+    await runThin({
+      capabilities: requested as Capability[],
+      port,
+      daemonCommand,
+    });
   });
 
 program.parse(process.argv);
