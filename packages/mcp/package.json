@@ -24,6 +24,7 @@
     "prepare": "npm run build",
     "watch": "tsup --watch",
     "test": "vitest run",
+    "bench": "node bench/run.mjs",
     "eval": "vitest run --config eval/vitest.config.ts",
     "inspector": "CLIENT_PORT=9001 SERVER_PORT=9002 pnpx @modelcontextprotocol/inspector node dist/index.js"
   },

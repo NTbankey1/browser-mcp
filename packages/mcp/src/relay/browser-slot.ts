@@ -1,9 +1,4 @@
-import {
-  type Browser,
-  type BrowserContext,
-  chromium,
-  type Page,
-} from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 
 import type { ExposedTab } from "@browsermcp/protocol";
 
@@ -112,9 +107,12 @@ export class BrowserSlot {
       if (!url) {
         return Promise.reject(new Error("The relay isn't listening yet"));
       }
+      // Load Playwright on first use: an idle daemon then doesn't pay its ~80 MB and ~260 ms at startup.
       // `noDefaults`: Playwright's default overrides (focus emulation, media emulation, downloads) stay off the user's tabs; the engine turns focus emulation on itself for the tabs it claims (`hiddenTabs`)
-      const promise = chromium
-        .connectOverCDP(url, { noDefaults: true })
+      const promise = import("playwright-core")
+        .then(({ chromium }) =>
+          chromium.connectOverCDP(url, { noDefaults: true }),
+        )
         .then((browser) => {
           browser.on("disconnected", () => {
             if (this.browserPromise === promise) {
