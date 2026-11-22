@@ -97,9 +97,10 @@ func (m *Manager) Ensure(ctx context.Context) (*Endpoint, error) {
 	args = append(args,
 		"--port", strconv.Itoa(port),
 		"--advertised-port", strconv.Itoa(m.publicPort),
-		"--no-idle-exit",
 	)
+	args = append(args, keepWorkerAliveArgs()...)
 	cmd := exec.Command(args[0], args[1:]...)
+	setParentDeathSignal(cmd)
 	cmd.Env = append(os.Environ(), "BROWSER_MCP_HOME="+workerHome)
 	// The worker writes its own log; stdout/stderr are discarded.
 	if err := cmd.Start(); err != nil {
