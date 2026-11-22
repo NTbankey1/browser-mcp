@@ -101,7 +101,7 @@ func TestThinProcessUsesGoFrontDoor(t *testing.T) {
 	}
 	repoRoot := repoRoot(t)
 	indexJs := filepath.Join(repoRoot, "packages", "mcp", "dist", "index.js")
-	binary := filepath.Join(repoRoot, "packages", "mcp", "dist", "browsermcpd")
+	binary := filepath.Join(repoRoot, "packages", "mcp", "bin", "browsermcpd")
 	requireBuild(t, indexJs)
 	requireBuild(t, binary)
 	node, err := exec.LookPath("node")
