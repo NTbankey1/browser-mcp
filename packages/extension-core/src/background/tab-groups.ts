@@ -140,6 +140,12 @@ async function updateGroup(
     if (tab.groupId !== groupId) {
       await browser.tabs.group({ tabIds: [tabId], groupId });
     }
+    // An agent's tab must be rendered for input and screenshots. A group the
+    // user collapsed hides it, so expand the app's group when a tab joins it.
+    const group = await getGroup(groupId);
+    if (group?.collapsed) {
+      await browser.tabGroups.update(groupId, { collapsed: false });
+    }
     return;
   }
   const newGroupId = await browser.tabs.group({
@@ -150,6 +156,7 @@ async function updateGroup(
   await browser.tabGroups.update(newGroupId, {
     title: entry.name,
     color: entry.color,
+    collapsed: false,
   });
 }
 

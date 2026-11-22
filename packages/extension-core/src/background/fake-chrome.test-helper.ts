@@ -38,6 +38,7 @@ type FakeGroup = {
   windowId: number;
   title?: string;
   color?: string;
+  collapsed?: boolean;
 };
 
 /**

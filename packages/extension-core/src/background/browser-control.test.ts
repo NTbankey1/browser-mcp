@@ -1024,6 +1024,20 @@ describe("tab groups", () => {
     );
   });
 
+  it("expands an app's collapsed group when an agent tab joins it", async () => {
+    chrome.addTab({ id: 1 });
+    const { ws } = await startPaired(await createDaemonKey());
+    const app = { id: "claude-code", name: "Claude Code" };
+    await request(ws, { method: "groupTab", params: { tabId: 1, app } });
+    const [groupId] = chrome.groups.keys();
+    chrome.groups.get(groupId)!.collapsed = true;
+
+    chrome.addTab({ id: 2 });
+    await request(ws, { method: "groupTab", params: { tabId: 2, app } });
+
+    expect(chrome.groups.get(groupId)!.collapsed).toBe(false);
+  });
+
   it("reports tabs the user drags into an app's group or out of it", async () => {
     chrome.addTab({ id: 1 });
     const { ws } = await startPaired(await createDaemonKey());
