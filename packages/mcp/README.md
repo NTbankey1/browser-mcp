@@ -56,7 +56,7 @@ AI app ──stdio──▶ thin process (dist/index.js, one per AI app)        
 
 ## Go front door (opt-in)
 
-`BROWSER_MCP_DAEMON=go` starts `dist/browsermcpd` instead of this package's Node
+`BROWSER_MCP_DAEMON=go` starts `bin/browsermcpd` instead of this package's Node
 daemon. The Go process owns the loopback port, `daemon.json`, the token, the
 Host/Origin checks and the idle exit, and proxies `/client` and `/extension` to
 the existing Node engine worker, which it starts on first use with the public

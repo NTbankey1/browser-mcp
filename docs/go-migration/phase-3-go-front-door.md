@@ -6,7 +6,7 @@
 
 ## What was built
 
-`packages/mcp/dist/browsermcpd` is a Go front door for Browser MCP. It owns:
+`packages/mcp/bin/browsermcpd` is a Go front door for Browser MCP. It owns:
 
 - the public loopback port (9010–9012, or `--port`);
 - `daemon.json`, the token, the log and the idle-exit timer;
@@ -69,7 +69,7 @@ this delivery.
 ## Usage
 
 ```sh
-# Build the Go binary next to dist/daemon.js
+# Build the Go binary to bin/; dist/daemon.js is one level up
 pnpm --filter @browsermcp/mcp go:build
 
 # Run the thin process with the Go front door
@@ -88,7 +88,7 @@ Run a front door by hand:
 
 ```sh
 BROWSER_MCP_HOME=$(mktemp -d) \
-  packages/mcp/dist/browsermcpd --port 9411 --stderr --engine "node packages/mcp/dist/daemon.js"
+  packages/mcp/bin/browsermcpd --port 9411 --stderr --engine "node packages/mcp/dist/daemon.js"
 ```
 
 ## Tests
@@ -112,28 +112,30 @@ The end-to-end tests require built artifacts:
    `tools/list`, `tools/call help`. This is the full
    AI-client → thin → Go → Node worker path.
 
-TypeScript: the existing suite still passes, including two new daemon tests:
+TypeScript: the existing suite still passes, including three new daemon tests:
 the pairing signature names the advertised port when a front door proxies the
-daemon, and `idleExitMs: 0` never schedules an idle exit.
+daemon, `idleExitMs: 0` never schedules an idle exit, and the worker stops when
+the front door disappears. The Go relay suite also covers an extension ID that
+only arrives in a client `hello` (`TestClientHelloExtensionIDsAreAllowed`).
 
 Benchmark:
 
 ```sh
-pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/dist/browsermcpd
+pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/bin/browsermcpd
 ```
 
 ## Security review
 
-| Control                     | Front door                                                                         | Worker                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Loopback bind               | `127.0.0.1` only                                                                   | `127.0.0.1` only                                       |
-| Host header / DNS rebinding | checked before every request                                                       | checked                                                |
-| Token on `/client`          | constant-time compare                                                              | worker token, internal only                            |
-| Token on `/shutdown`        | constant-time compare, no Origin                                                   | `POST /shutdown`                                       |
-| Extension Origin            | `chrome-extension://` + allowlist                                                  | its own allowlist + dev IDs                            |
-| `/cdp`                      | **404** (not exposed)                                                              | internal Playwright connection only                    |
-| Payload cap                 | 256 MB                                                                             | 256 MB                                                 |
-| Idle exit                   | front door owns it; on Linux the worker also gets `Pdeathsig` and `--no-idle-exit` | elsewhere the worker keeps its idle exit as a fallback |
+| Control                     | Front door                                                    | Worker                                                                      |
+| --------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Loopback bind               | `127.0.0.1` only                                              | `127.0.0.1` only                                                            |
+| Host header / DNS rebinding | checked before every request                                  | checked                                                                     |
+| Token on `/client`          | constant-time compare                                         | worker token, internal only                                                 |
+| Token on `/shutdown`        | constant-time compare, no Origin                              | `POST /shutdown`                                                            |
+| Extension Origin            | `chrome-extension://` + allowlist                             | its own allowlist + dev IDs                                                 |
+| `/cdp`                      | **404** (not exposed)                                         | internal Playwright connection only                                         |
+| Payload cap                 | 256 MB                                                        | 256 MB                                                                      |
+| Idle exit                   | front door owns it; Linux gets `Pdeathsig` + `--no-idle-exit` | the worker also checks the front door every 15 s and exits after two misses |
 
 The front door does not weaken any extension-enforced rule: pairing, incognito,
 Stop, browser pages, file access and tab restrictions are still enforced by the
@@ -141,9 +143,9 @@ extension and the worker.
 
 ## Limitations and rollback
 
-- **Abrupt front-door death:** on Linux the worker gets `Pdeathsig` and dies with
-  the front door, including on `SIGKILL`; on macOS/Windows it keeps its own
-  10-minute idle exit as a fallback.
+- **Abrupt front-door death:** on Linux the worker gets `Pdeathsig`; all
+  platforms also check the front door every 15 s and exit after two misses, so
+  the worker cannot outlive it.
 - The engine is still TypeScript/Playwright. A full Go engine is a separate,
   larger project; until then, browser-time memory is higher with the hybrid.
 - The front door adds one local WebSocket hop; measured RPC latency remains
@@ -151,4 +153,4 @@ extension and the worker.
 - Packaging the binary for npm (platform matrix, signing) is not done.
 - Rollback: unset `BROWSER_MCP_DAEMON` (or remove it from the MCP config). The
   Node daemon is still the default and needs no changes. Delete
-  `packages/mcp/dist/browsermcpd` to remove the artifact.
+  `packages/mcp/bin/browsermcpd` to remove the artifact.

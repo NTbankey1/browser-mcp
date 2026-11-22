@@ -340,7 +340,7 @@ async function screenshot(ctx: StepContext) {
       if (!(error instanceof StepError)) throw error;
       throw new StepError(
         (await hiddenTabs.isVisible(page))
-          ? `The screenshot took over ${hiddenTabs.screenshotTimeoutMs / 1000} s`
+          ? `The screenshot took over ${hiddenTabs.screenshotTimeoutMs / 1000} s. If the app's tab group is collapsed, expand it or bring the tab forward, then retry`
           : HIDDEN_TAB_MESSAGE,
       );
     } finally {
@@ -953,8 +953,8 @@ export const COMMANDS: CommandDef[] = [
     name: "snapshot",
     reads: true,
     usage:
-      "snapshot [<target>] [-i] [--depth N] [--max N|all]   # -i: interactive elements, headings, landmarks",
-    help: "Prints the accessibility tree with refs (e12, f1e3 in iframes) to use as targets. -i keeps interactive elements, landmarks, headings and cells. A target or --depth narrows it; refs stay valid either way.",
+      "snapshot [<target>] [-i] [--depth N] [--max <chars>|all]   # -i: interactive elements, headings, landmarks",
+    help: "Prints the accessibility tree with refs (e12, f1e3 in iframes) to use as targets. -i keeps interactive elements, landmarks, headings and cells. A target or --depth narrows it; refs stay valid either way. --max <chars> caps the printed characters; all prints everything.",
     flags: { i: false, depth: true, max: true },
     maxArgs: 1,
     run: snapshotCommand,
@@ -962,8 +962,9 @@ export const COMMANDS: CommandDef[] = [
   {
     name: "find",
     reads: true,
-    usage: 'find "<text>" [--max N|all]   # snapshot lines containing the text',
-    help: "Prints the snapshot lines whose name, text or URL contain the text (ignoring case), each with its ancestors, so you can act on a ref without a full snapshot.",
+    usage:
+      'find "<text>" [--max <chars>|all]   # snapshot lines containing the text',
+    help: "Prints the snapshot lines whose name, text or URL contain the text (ignoring case), each with its ancestors, so you can act on a ref without a full snapshot. --max <chars> caps the printed characters; all prints everything.",
     flags: { max: true },
     maxArgs: 1,
     async run(ctx) {
@@ -985,8 +986,8 @@ export const COMMANDS: CommandDef[] = [
     name: "get",
     reads: true,
     usage:
-      "get text|value|count [<target>] [--max N|all] | get attr <name> <target> | get url | get title",
-    help: "text: the target's visible text (the page's without a target). value: a field's value. count: how many elements match. attr: an attribute.",
+      "get text|value|count [<target>] [--max <chars>|all] | get attr <name> <target> | get url | get title",
+    help: "text: the target's visible text (the page's without a target). value: a field's value. count: how many elements match. attr: an attribute. --max <chars> caps the printed characters; all prints everything.",
     flags: { max: true },
     maxArgs: 3,
     async run(ctx) {

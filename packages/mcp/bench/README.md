@@ -44,7 +44,7 @@ does.
 
 ```sh
 pnpm --filter @browsermcp/mcp go:build
-pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/dist/browsermcpd --runs 3
+pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/bin/browsermcpd --runs 3
 ```
 
 `--bin` accepts the built Go front door as well as the Node daemon. With the Go

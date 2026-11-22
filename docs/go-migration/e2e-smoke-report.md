@@ -118,10 +118,10 @@ pnpm build
 # Node daemon
 pnpm --filter @browsermcp/extension smoke
 
-# Go front door (pnpm build cleans dist, so build the binary afterwards)
+# Go front door (the binary is built to bin/, so pnpm build does not remove it)
 pnpm --filter @browsermcp/mcp go:build
 BROWSER_MCP_DAEMON=go \
-BROWSER_MCP_GO_DAEMON="$PWD/packages/mcp/dist/browsermcpd" \
+BROWSER_MCP_GO_DAEMON="$PWD/packages/mcp/bin/browsermcpd" \
   node apps/extension/scripts/smoke-browser-control.ts --out /tmp/smoke-go
 
 # Process hygiene
@@ -131,3 +131,41 @@ pgrep -af 'browsermcpd|dist/daemon.js'
 Screenshots: `apps/extension/.output/smoke/` (Node run) and `/tmp/smoke-go/`
 (earlier Go run); the final Go run wrote to `/tmp/smoke-go-final/`. They are
 not committed.
+
+## Post-report fixes (same day)
+
+- The Go front door now adds extension IDs from each client's `hello`, matching
+  the Node daemon (`TestClientHelloExtensionIDsAreAllowed`). Before this, a
+  dev/custom ID that only arrived in a running client's hello could be rejected
+  by the front door before the worker saw it.
+- The worker checks the front door's `/status` every 15 s and exits after two
+  misses; Linux also uses `Pdeathsig`. An abruptly killed front door cannot leave
+  it running.
+- The Go binary now builds into `bin/`, which `tsup` does not delete; it reads
+  the package version at startup and finds `dist/daemon.js` automatically.
+- `--max` in `find`, `get` and `snapshot` help now says it caps characters, not
+  matches.
+- A screenshot timeout now suggests expanding a collapsed tab group or bringing
+  the tab forward.
+
+## Real Brave profile demo
+
+Beyond the headless smoke, the final `bin/browsermcpd` was driven against the
+running Brave with the unpacked self-built extension:
+
+- local fixture: fill, upload (`upload.txt`, one file), click, `"Hello, Bao"`;
+- screenshot **1568×903 JPEG** (18,139 bytes), PDF **1 page** (104,639 bytes),
+  CSV download **26 bytes**;
+- Hacker News: `snapshot -i`, `find "Show HN"`, `requests --static`
+  (HTML/CSS/JS/SVG);
+- heavy call 3.1 s with a warm worker; HN 1.65 s.
+
+A first attempt hit the 5 s screenshot timeout; a retry passed. The likely cause
+is a hidden or collapsed tab group (the page was in the app's background group).
+The timeout message now says to expand the group or bring the tab forward.
+
+**Environment note:** another Brave extension
+(`mjdbhokoopacimoekfgkcoogikbfgngb`) injects `eduser.css`/`edreader.css` and
+modifies `document.title`, so titles read `13. example.com`. This is not a
+Browser MCP bug; use a clean profile for automation or read the content/URL
+instead of the title.

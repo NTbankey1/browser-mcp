@@ -7,6 +7,10 @@
 **Raw data:** [`bench-results/node-daemon-2026-11-23.json`](bench-results/node-daemon-2026-11-23.json),
 [`bench-results/go-front-door-2026-11-23.json`](bench-results/go-front-door-2026-11-23.json)
 
+The Go JSON's `path` field records the pre-`bin/` layout; the binary now lives in
+`packages/mcp/bin/browsermcpd`. The later fixes do not change the measured
+lifecycle numbers.
+
 ## What was measured
 
 Both implementations were built from commit `9658da4` and driven by
@@ -90,7 +94,7 @@ node packages/mcp/bench/run.mjs --runs 5 --json /tmp/node.json
 
 # Go front door (starts the Node worker on first client)
 node packages/mcp/bench/run.mjs \
-  --bin packages/mcp/dist/browsermcpd \
+  --bin packages/mcp/bin/browsermcpd \
   --runs 5 --json /tmp/go.json
 ```
 

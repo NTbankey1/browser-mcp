@@ -15,10 +15,10 @@ Requirements:
 ```sh
 pnpm install --frozen-lockfile
 pnpm build                         # thin + Node daemon (tsup cleans dist)
-pnpm --filter @browsermcp/mcp go:build   # dist/browsermcpd (must run after pnpm build)
+pnpm --filter @browsermcp/mcp go:build   # bin/browsermcpd (must run after pnpm build)
 ```
 
-`pnpm build` runs `tsup` with `clean: true`, so it removes `dist/browsermcpd`.
+`pnpm build` runs `tsup` with `clean: true`, so it removes `bin/browsermcpd`.
 Run `go:build` after every build, or add it to your local build script.
 
 Enable the front door in the MCP config (or the shell that launches the server):
@@ -31,7 +31,7 @@ Enable the front door in the MCP config (or the shell that launches the server):
       "args": ["/absolute/path/to/packages/mcp/dist/index.js"],
       "env": {
         "BROWSER_MCP_DAEMON": "go",
-        "BROWSER_MCP_GO_DAEMON": "/absolute/path/to/packages/mcp/dist/browsermcpd"
+        "BROWSER_MCP_GO_DAEMON": "/absolute/path/to/packages/mcp/bin/browsermcpd"
       }
     }
   }
@@ -39,43 +39,44 @@ Enable the front door in the MCP config (or the shell that launches the server):
 ```
 
 Without `BROWSER_MCP_DAEMON=go`, the thin process starts the Node daemon exactly
-as before. `BROWSER_MCP_GO_DAEMON` is optional when the binary sits next to
-`index.js` (the default path).
+as before. `BROWSER_MCP_GO_DAEMON` is optional when the binary is in the package's
+`bin/` directory (one level up from `dist/`).
 
 ## Configuration
 
-| Setting                     | Where               | Default                | Meaning                                                                      |
-| --------------------------- | ------------------- | ---------------------- | ---------------------------------------------------------------------------- |
-| `BROWSER_MCP_HOME`          | env                 | `~/.browsermcp`        | daemon files, identity, logs                                                 |
-| `BROWSER_MCP_DAEMON`        | env                 | unset                  | `go` starts the Go front door                                                |
-| `BROWSER_MCP_GO_DAEMON`     | env                 | `dist/browsermcpd`     | front-door binary path                                                       |
-| `BROWSER_MCP_EXTENSION_IDS` | env                 | empty                  | extra extension IDs allowed on `/extension`                                  |
-| `--port <n>`                | thin / front door   | 9010–9012              | one fixed port (set the same in the extension)                               |
-| `--idle-exit <duration>`    | front door          | `10m`                  | exit after this long with no client; `0` disables                            |
-| `--engine <command>`        | front door          | `node <dir>/daemon.js` | engine worker command                                                        |
-| `--advertised-port <n>`     | worker              | listening port         | port the extension dialed (set by the front door)                            |
-| `--no-idle-exit`            | worker              | off                    | Linux: the front door owns idle exit; other OSes keep the worker's idle exit |
-| `--stderr`                  | front door / worker | off                    | also log to stderr                                                           |
+| Setting                     | Where               | Default                        | Meaning                                                                      |
+| --------------------------- | ------------------- | ------------------------------ | ---------------------------------------------------------------------------- |
+| `BROWSER_MCP_HOME`          | env                 | `~/.browsermcp`                | daemon files, identity, logs                                                 |
+| `BROWSER_MCP_DAEMON`        | env                 | unset                          | `go` starts the Go front door                                                |
+| `BROWSER_MCP_GO_DAEMON`     | env                 | `bin/browsermcpd`              | front-door binary path                                                       |
+| `BROWSER_MCP_EXTENSION_IDS` | env                 | empty                          | extra extension IDs allowed on `/extension`                                  |
+| `--port <n>`                | thin / front door   | 9010–9012                      | one fixed port (set the same in the extension)                               |
+| `--idle-exit <duration>`    | front door          | `10m`                          | exit after this long with no client; `0` disables                            |
+| `--engine <command>`        | front door          | auto-detected `dist/daemon.js` | engine worker command                                                        |
+| `--advertised-port <n>`     | worker              | listening port                 | port the extension dialed (set by the front door)                            |
+| `--no-idle-exit`            | worker              | off                            | Linux: the front door owns idle exit; other OSes keep the worker's idle exit |
+| `--parent-port <n>`         | worker              | unset                          | the front door's port; the worker exits after two missed checks              |
+| `--stderr`                  | front door / worker | off                            | also log to stderr                                                           |
 
 ## Development workflow
 
 ```sh
 pnpm install
 pnpm typecheck && pnpm lint && pnpm format
-pnpm test                    # mcp 194 passed (7 skipped); extension-core 101; extension 1
+pnpm test                    # mcp 195 passed (7 skipped); extension-core 101; extension 1
 pnpm build
 pnpm --filter @browsermcp/mcp go:build
 pnpm go:test                 # Go: go test -race ./...
 pnpm --filter @browsermcp/extension smoke
 # Go front door variant (see e2e-smoke-report.md)
 BROWSER_MCP_DAEMON=go \
-BROWSER_MCP_GO_DAEMON="$PWD/packages/mcp/dist/browsermcpd" \
+BROWSER_MCP_GO_DAEMON="$PWD/packages/mcp/bin/browsermcpd" \
   node apps/extension/scripts/smoke-browser-control.ts --out /tmp/smoke-go
 pnpm --filter @browsermcp/mcp bench -- --runs 5
-pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/dist/browsermcpd --runs 5
+pnpm --filter @browsermcp/mcp bench -- --bin packages/mcp/bin/browsermcpd --runs 5
 ```
 
-The Go integration tests skip when `dist/index.js` or `dist/browsermcpd` is
+The Go integration tests skip when `dist/index.js` or `bin/browsermcpd` is
 missing; build first for full coverage.
 
 ## Files and logs
@@ -90,6 +91,10 @@ With `BROWSER_MCP_HOME=~/.browsermcp` (or the temp directory you chose):
 | `engine-<publicPort>/daemon-<workerPort>.log`  | engine worker               | engine log                 |
 | `engine-<publicPort>/identity.json`            | engine worker               | pairing key                |
 | `identity.json`                                | Node daemon (default mode)  | pairing key                |
+
+The worker checks the front door's `/status` every 15 s and exits after two
+misses (`--parent-port`); on Linux it also gets `Pdeathsig`. An abruptly killed
+front door therefore cannot leave the worker running.
 
 ## Debugging
 
@@ -126,7 +131,7 @@ The Go front door is opt-in and does not migrate data.
    (or unset them), then restart the AI app.
 2. The thin process starts the Node daemon again. `daemon.json` is rewritten by
    whichever daemon runs.
-3. Optionally delete `packages/mcp/dist/browsermcpd` to remove the artifact.
+3. Optionally delete `packages/mcp/bin/browsermcpd` to remove the artifact.
 4. Verify: `curl http://127.0.0.1:<port>/browsermcp/status` and a `browser`
    tool call (`help`, then `goto https://example.com`).
 
@@ -134,18 +139,14 @@ No extension changes are needed; the extension protocol is unchanged.
 
 ## Known limitations
 
-- **Orphan window on macOS/Windows:** Linux workers get `Pdeathsig` and die with
-  the front door. Elsewhere the worker keeps its own 10-minute idle exit, so an
-  abruptly killed front door can leave it for up to 10 minutes (it does not run
-  forever).
-
 - **Hybrid memory:** while the Node worker is resident, the process tree costs
   more than the Node daemon alone (~91 MB vs ~71 MB in the benchmark). The Go
   front door wins startup and idle cost, not browser-time memory.
 - **First-call latency:** the worker starts on the first client or extension
   connection (~90 ms in the benchmark).
-- **Packaging:** the binary is built locally. Shipping signed binaries for
-  Linux/macOS/Windows and x64/arm64 through npm is not implemented.
+- **Packaging:** the binary is built locally into `bin/` and reads the package
+  version at startup, but signing and shipping binaries for all npm platforms is
+  not implemented.
 - **Engine language:** the engine remains TypeScript/Playwright. A native Go
   engine is a separate project; it must pass the conformance suite before it
   can replace the worker.
