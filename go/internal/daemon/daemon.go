@@ -14,7 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/coder/websocket"
+
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/browser"
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/client"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/config"
+	cmdengine "github.com/NTbankey1/browser-mcp/go-daemon/internal/engine"
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/extension"
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/pairing"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/protocol"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/relay"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/worker"
@@ -26,19 +33,20 @@ var ErrAlreadyRunning = errors.New("another Browser MCP daemon is already listen
 
 // Daemon is a running front door.
 type Daemon struct {
-	cfg      config.Config
-	token    string
-	port     int
-	server   *relay.Server
-	engine   *worker.Manager
-	logger   *slog.Logger
-	logFile  *os.File
-	stopped  chan string
-	stopOnce sync.Once
-	stopping atomic.Bool
-	idleMu   sync.Mutex
-	idle     *time.Timer
-	clients  int
+	cfg        config.Config
+	token      string
+	port       int
+	server     *relay.Server
+	engine     *worker.Manager
+	nativeStop func(context.Context)
+	logger     *slog.Logger
+	logFile    *os.File
+	stopped    chan string
+	stopOnce   sync.Once
+	stopping   atomic.Bool
+	idleMu     sync.Mutex
+	idle       *time.Timer
+	clients    int
 }
 
 // Start binds the port, writes daemon.json and serves until Stop.
@@ -70,26 +78,55 @@ func Start(cfg config.Config) (*Daemon, error) {
 	if advertised == 0 {
 		advertised = port
 	}
-	engine := worker.New(cfg.Home, advertised, cfg.EngineCommand, logger)
 	d := &Daemon{
 		cfg:     cfg,
 		token:   token,
 		port:    port,
-		engine:  engine,
 		logger:  logger,
 		logFile: logFile,
 		stopped: make(chan string, 1),
 	}
-	d.server = relay.New(listener, relay.Options{
+	options := relay.Options{
 		Token:         token,
 		Version:       cfg.Version,
-		Engine:        engine,
 		Logger:        logger,
 		Home:          cfg.Home,
 		OnClientOpen:  d.clientOpen,
 		OnClientClose: d.clientClose,
 		OnShutdown:    func() { go d.Stop("shutdown") },
-	})
+	}
+	var engineManager *worker.Manager
+	var nativeStop func(context.Context)
+	if cfg.Native {
+		identity, err := pairing.LoadOrCreate(cfg.Home)
+		if err != nil {
+			listener.Close()
+			logFile.Close()
+			return nil, err
+		}
+		registry := browser.New(browser.Options{Log: logger})
+		commandEngine := cmdengine.New(cmdengine.Options{Browsers: registry, Log: logger})
+		nativeStop = func(ctx context.Context) {
+			commandEngine.Close()
+			registry.ReleaseAll(ctx)
+		}
+		options.AcceptExtension = func(ctx context.Context, conn *websocket.Conn) error {
+			_, err := registry.AcceptExtension(ctx, conn, extension.Options{
+				Identity: identity, Version: cfg.Version, Port: advertised, Log: logger,
+			})
+			return err
+		}
+		options.AcceptClient = func(ctx context.Context, conn *websocket.Conn, hello []byte) error {
+			return client.Accept(ctx, conn, hello, commandEngine, client.Options{Version: cfg.Version, Log: logger})
+		}
+		logger.Info("native engine enabled")
+	} else {
+		engineManager = worker.New(cfg.Home, advertised, cfg.EngineCommand, logger)
+		options.Engine = engineManager
+	}
+	d.engine = engineManager
+	d.nativeStop = nativeStop
+	d.server = relay.New(listener, options)
 
 	info := config.Info{
 		Port:    port,
@@ -128,7 +165,11 @@ func (d *Daemon) Stop(reason string) {
 		config.RemoveInfo(config.InfoPath(d.cfg.Home, d.cfg.Port), os.Getpid())
 		_ = d.server.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		d.engine.Stop(ctx)
+		if d.nativeStop != nil {
+			d.nativeStop(ctx)
+		} else if d.engine != nil {
+			d.engine.Stop(ctx)
+		}
 		cancel()
 		d.logger.Info("daemon stopped", "reason", reason)
 		_ = d.logFile.Close()

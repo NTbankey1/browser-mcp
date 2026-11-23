@@ -139,4 +139,7 @@ type Config struct {
 	AdvertisedPort int
 	IdleExit       time.Duration
 	Stderr         bool
+	// Native runs the command engine in this process instead of proxying to
+	// the TypeScript engine worker.
+	Native bool
 }

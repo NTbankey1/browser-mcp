@@ -27,6 +27,7 @@ func main() {
 	engine := flags.String("engine", "", "engine command (default: node <binary dir>/daemon.js)")
 	stderr := flags.Bool("stderr", false, "also log to stderr")
 	idle := flags.Duration("idle-exit", 10*time.Minute, "exit after this long with no client (0 disables)")
+	native := flags.Bool("native-engine", false, "run the native Go command engine instead of the Node worker")
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	_ = flags.Parse(os.Args[1:])
 
@@ -49,6 +50,7 @@ func main() {
 		AdvertisedPort: *advertised,
 		IdleExit:       *idle,
 		Stderr:         *stderr,
+		Native:         *native || os.Getenv("BROWSER_MCP_ENGINE") == "native",
 	}
 	if *engine != "" {
 		cfg.EngineCommand = strings.Fields(*engine)

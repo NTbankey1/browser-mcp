@@ -41,6 +41,13 @@ type Options struct {
 	OnClientOpen  func()
 	OnClientClose func()
 	OnShutdown    func()
+
+	// When set, the front door runs the native engine: it hands accepted
+	// sockets to these instead of proxying them to a Node worker. AcceptClient
+	// receives the first frame (the thin process's hello), which the front door
+	// reads to learn its extension IDs.
+	AcceptExtension func(ctx context.Context, conn *websocket.Conn) error
+	AcceptClient    func(ctx context.Context, conn *websocket.Conn, hello []byte) error
 }
 
 // Server is the front door's HTTP and WebSocket server.
@@ -170,6 +177,13 @@ func (s *Server) handleExtension(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close(websocket.StatusNormalClosure, "")
 
+	if s.opts.AcceptExtension != nil {
+		s.track(client)
+		defer s.untrack(client)
+		_ = s.opts.AcceptExtension(r.Context(), client)
+		return
+	}
+
 	endpoint, err := s.opts.Engine.Ensure(r.Context())
 	if err != nil {
 		_ = client.Close(websocket.StatusInternalError, "engine unavailable")
@@ -207,6 +221,29 @@ func (s *Server) handleClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer client.Close(websocket.StatusNormalClosure, "")
+
+	if s.opts.AcceptClient != nil {
+		s.track(client)
+		defer s.untrack(client)
+		firstContext, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		_, data, err := client.Read(firstContext)
+		cancel()
+		if err != nil {
+			_ = client.Close(websocket.StatusPolicyViolation, "Expected hello")
+			return
+		}
+		s.noteClientHello(data)
+		if s.opts.OnClientOpen != nil {
+			s.opts.OnClientOpen()
+		}
+		defer func() {
+			if s.opts.OnClientClose != nil {
+				s.opts.OnClientClose()
+			}
+		}()
+		_ = s.opts.AcceptClient(r.Context(), client, data)
+		return
+	}
 
 	endpoint, err := s.opts.Engine.Ensure(r.Context())
 	if err != nil {
