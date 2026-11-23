@@ -8,31 +8,64 @@
 
 ## Contents
 
-- [Why Browser MCP](#why-browser-mcp)
+- [What it is](#what-it-is)
+- [What it can do](#what-it-can-do)
 - [How it works](#how-it-works)
-- [Two engines](#two-engines)
-- [Quick start](#quick-start)
+- [Install](#install)
 - [The `browser` tool](#the-browser-tool)
 - [Several browsers and tabs](#several-browsers-and-tabs)
 - [Pairing, permissions and safety](#pairing-permissions-and-safety)
-- [Native Go engine (optional)](#native-go-engine-optional)
-- [Project layout](#project-layout)
+- [Engines](#engines)
+- [Native Go engine](#native-go-engine)
+- [Project structure](#project-structure)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
 - [Contributing and security](#contributing-and-security)
 - [License](#license)
 
-## Why Browser MCP
+## What it is
 
-|                                 |                                                                                                                                                |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Your session, not a sandbox** | The agent works in your profile: signed-in sites, cookies, extensions, the tabs you already have.                                              |
-| **Your real browser**           | Chrome, Edge, Brave, Arc and other Chromium browsers, through the `debugger` API. No bundled browser, no separate profile.                     |
-| **One small tool**              | A single `browser` tool takes many command lines in one call, so an agent can plan a whole workflow instead of one round trip per click.       |
-| **Tabs of their own**           | Agents open background tabs in a group named after the app, colored per app, with a toolbar badge showing who is acting. Your tabs stay yours. |
-| **Local and permissioned**      | Loopback only, six-digit pairing, **Stop**/Resume, no incognito unless you allow it, no browser or extension pages.                            |
-| **Two engines**                 | Node + Playwright by default; an opt-in native Go engine with no Node or Playwright at runtime. Same protocol, same commands.                  |
+Browser MCP is a bridge between an AI app and **your** browser. The app gets one tool, `browser`, and uses it to open pages, click, type, read the accessibility tree, inspect network traffic, take screenshots and save files — in your normal profile, with your logins, without a bundled or headless browser.
+
+It is split into small local processes so that nothing is shared between apps except the browser itself:
+
+| Piece                      | What it gives you                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Your session**           | The agent works in your profile: signed-in sites, cookies, extensions and the tabs you already have.                               |
+| **Real tabs**              | Agents open background tabs in a group named and colored per app. A toolbar badge shows which app is acting. Your tabs stay yours. |
+| **One small tool**         | `browser` takes many command lines in one call, so an agent can plan a whole workflow: navigate, fill, click, wait, verify.        |
+| **Local and permissioned** | Loopback only, six-digit pairing, **Stop**/Resume, no incognito unless you allow it, no browser or extension pages.                |
+| **Chromium browsers**      | Chrome, Edge, Brave, Arc, Opera, Vivaldi and similar, through the browser's own extension and `debugger` API.                      |
+
+## What it can do
+
+| Area             | The agent can…                                                                                        | Commands                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Navigate**     | Open a URL, go back or forward, reload, wait for the page.                                            | `goto`, `back`, `forward`, `reload`                             |
+| **Interact**     | Click, double-click, right-click, hover, drag, scroll.                                                | `click`, `hover`, `drag`, `scroll`                              |
+| **Forms**        | Fill fields, type key by key for autocomplete, press keys, select options, check boxes, upload files. | `fill`, `type`, `press`, `select`, `check`, `uncheck`, `upload` |
+| **Read**         | Print the accessibility tree with refs, search it, read text, values, attributes, URL and title.      | `snapshot`, `find`, `get`                                       |
+| **Run code**     | Evaluate JavaScript in the page and get the result as JSON.                                           | `eval`                                                          |
+| **Capture**      | Take a JPEG screenshot of the viewport, an element or the full page; print a PDF; download a file.    | `screenshot`, `pdf`, `download`                                 |
+| **Diagnose**     | Read console messages, uncaught errors, requests and request details.                                 | `console`, `requests`, `request`                                |
+| **Tabs**         | List tabs, open a background tab, switch to any tab, close a tab it opened.                           | `tab list/new/select/close`                                     |
+| **Profiles**     | List connected browsers and choose where new tabs open.                                               | `browser list/use`                                              |
+| **Dialogs**      | Answer alert, confirm, prompt and beforeunload dialogs.                                               | `dialog accept/dismiss`                                         |
+| **Raw protocol** | Send any Chrome DevTools Protocol command, when the app starts with `--caps cdp`.                     | `cdp`                                                           |
+
+A whole workflow fits in one call:
+
+```text
+goto https://shop.example.com
+fill getByLabel('Email') "me@example.com"
+fill getByLabel('Password') "correct horse battery staple"
+click getByRole('button', { name: 'Sign in' })
+wait --text "Welcome"
+snapshot -i
+```
+
+Actions print one `✓` line; reads print their output below it. A failed step names the line and what to do next.
 
 ## How it works
 
@@ -52,30 +85,9 @@ flowchart LR
 
 Ports: the daemon takes the first free of `9010`, `9011`, `9012` (or `--port <n>`, set the same in the extension's settings). State lives in `~/.browsermcp/` (0700): `daemon.json`, `identity.json`, `daemon.log`.
 
-## Two engines
+## Install
 
-| Mode              | Daemon and engine                             | Enable                                              |
-| ----------------- | --------------------------------------------- | --------------------------------------------------- |
-| **Default**       | Node daemon, TypeScript + Playwright          | nothing                                             |
-| **Go front door** | Go daemon, proxying to the Node engine worker | `BROWSER_MCP_DAEMON=go`                             |
-| **Native Go**     | Go daemon and Go browser engine               | `BROWSER_MCP_DAEMON=go` `BROWSER_MCP_ENGINE=native` |
-
-The native engine speaks the same extension protocol and pairing, exposes the same `browser` tool, and passes the repository's real-extension smoke test **20/20**.
-
-| Median of 5 runs, same machine  | Node + Playwright |    Native Go |
-| ------------------------------- | ----------------: | -----------: |
-| Cold start to `/status`         |           92.4 ms |  **15.0 ms** |
-| RSS while a client is connected |           83.5 MB |  **17.4 MB** |
-| `click` p50                     |          568.9 ms | **217.1 ms** |
-| `fill` p50                      |          276.9 ms |  **10.0 ms** |
-| First browser call              |          504.5 ms | **175.1 ms** |
-| Large-page `snapshot` p50       |       **50.3 ms** |     213.2 ms |
-
-It is **not the default yet**: large-page snapshots are slower than Playwright's, and raw `cdp` sessions and cross-origin `frameLocator` differ. Details: [compatibility matrix](docs/migration/COMPATIBILITY_MATRIX.md), [measurements](docs/benchmarks/RESULTS.md), [architecture](docs/architecture/ARCHITECTURE.md).
-
-## Quick start
-
-### From npm (fastest)
+### From npm
 
 1. Install the [Browser MCP extension](https://chromewebstore.google.com/detail/bjfgambnhccakkhmkepdoekmckoijdlc) and pin it to the toolbar.
 2. Add the server to your AI app and restart it:
@@ -101,7 +113,7 @@ It is **not the default yet**: large-page snapshots are slower than Playwright's
 
 ### From source
 
-You need Node.js 24+, pnpm (`corepack enable`) and a Chromium browser. Firefox has no `debugger` API, so Browser MCP doesn't work there. The native Go engine additionally needs Go 1.24+.
+You need Node.js 24+, pnpm (`corepack enable`) and a Chromium browser. Firefox and Safari have no equivalent `debugger` API, so Browser MCP does not work there. The native Go engine additionally needs Go 1.24+.
 
 ```sh
 git clone https://github.com/NTbankey1/browser-mcp.git browsermcp
@@ -132,18 +144,7 @@ Every build of this extension has the same ID (`imlplcjlhgpajopdbpbngiadkcmdbgob
 
 ## The `browser` tool
 
-One tool, one `commands` string, **one command per line**. The agent can put a whole workflow in a single call:
-
-```text
-goto https://shop.example.com
-fill getByLabel('Email') "me@example.com"
-fill getByLabel('Password') "correct horse battery staple"
-click getByRole('button', { name: 'Sign in' })
-wait --text "Welcome"
-snapshot -i
-```
-
-The engine parses every line first (a typo runs none of it), then runs them in order, stopping at the first error. Actions print one `✓` line; reads print their output below it. A failed step names the line and what to do next, and the response ends with a `Page:` line when the page changed.
+One tool, one `commands` string, **one command per line**. The engine parses every line first (a typo runs none of it), then runs them in order, stopping at the first error.
 
 ### Actions
 
@@ -195,7 +196,7 @@ A target is any of:
 - a **locator**: `getByRole('button', { name: 'Submit' })`, `getByLabel('Email')`, `getByText('…')`, `getByPlaceholder('…')`, `getByTestId('…')`, `locator('css')`, with `.first()`, `.nth(i)`, `.filter({ hasText: '…' })`;
 - a **CSS selector** (quote it if it has spaces).
 
-> **Tip — fewer round trips, fewer tokens.** Act in batches. Targets like `getByLabel('Email')` work without a snapshot, so a form can be filled in one call. Look with `snapshot -i` or `find "<text>"`; re-snapshot after navigating, because refs from an older page fail.
+> **Tip — fewer round trips.** Act in batches. Targets like `getByLabel('Email')` work without a snapshot, so a form can be filled in one call. Look with `snapshot -i` or `find "<text>"`; re-snapshot after navigating, because refs from an older page fail.
 
 ## Several browsers and tabs
 
@@ -219,11 +220,34 @@ A target is any of:
 
 Nothing is sent to a Browser MCP server: there is no hosted component. What the agent reads from a page is, of course, visible to the AI app you gave it to.
 
-## Native Go engine (optional)
+## Engines
+
+The daemon has two implementations. Both speak the same extension protocol, pair the same way, and expose the same `browser` tool; the extension does not know which one is running.
+
+| Mode              | What runs                                            | Enable                                              |
+| ----------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| **Default**       | Node daemon with the TypeScript + Playwright engine  | nothing                                             |
+| **Go front door** | Go daemon handing the connections to the Node engine | `BROWSER_MCP_DAEMON=go`                             |
+| **Native Go**     | Go daemon with the Go browser engine                 | `BROWSER_MCP_DAEMON=go` `BROWSER_MCP_ENGINE=native` |
+
+Where the work happens:
+
+```text
+MCP server ──▶ daemon ──┬── command engine ──▶ browser slots ──▶ extension ──▶ tab
+                        ├── sessions and tab locks
+                        ├── pairing and identity
+                        └── file requests to the MCP server
+```
+
+## Native Go engine
+
+Build it beside the server:
 
 ```sh
 pnpm go:build        # builds packages/mcp/bin/browsermcpd
 ```
+
+Then set both variables in the AI app's MCP config (or the shell that starts it):
 
 ```json
 {
@@ -242,26 +266,45 @@ pnpm go:build        # builds packages/mcp/bin/browsermcpd
 
 The MCP server starts the Go daemon on first use. The extension connects exactly as before and stays paired: both engines use the same `~/.browsermcp/identity.json`. Remove `BROWSER_MCP_ENGINE` to return to the Node engine; see [ROLLBACK.md](docs/migration/ROLLBACK.md).
 
-What is in the native engine:
+The native engine covers the same commands, pairing, tab IDs, reconnects and multi-browser behaviour. Its internals are described in [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) and [PROTOCOL.md](docs/architecture/PROTOCOL.md).
 
-| Area                                                                 | Status                                                                       |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Pairing, extension protocol, reconnects, multi-browser IDs           | Complete; byte-compatible with Node (tested against Node both ways).         |
-| All `browser` commands, snapshots, locators, actions, files, dialogs | Complete; 20/20 real-extension smoke sections.                               |
-| Large-page snapshots                                                 | Slower than Playwright's JSON decode; the main optimisation target.          |
-| Raw `cdp`                                                            | Shares the tab's debugger session; overrides are cleaned up less granularly. |
-| `frameLocator`                                                       | Same-origin frames only.                                                     |
+## Project structure
 
-## Project layout
+```text
+browser-mcp/
+├── apps/extension/            the Chromium extension: background, popup, manifest
+├── packages/
+│   ├── mcp/                   the MCP server and the daemon (TypeScript)
+│   │   ├── src/thin/          stdio MCP server, one per AI app
+│   │   ├── src/daemon/        ports, sessions, identity, idle exit
+│   │   ├── src/relay/         HTTP/WebSocket server and extension connection
+│   │   └── src/commands/      the browser tool's command engine
+│   ├── protocol/              extension↔daemon frames and pairing
+│   └── extension-core/        browser control shared by extensions
+├── go/                        the Go daemon and native engine
+│   ├── cmd/browsermcpd/       the daemon binary
+│   └── internal/
+│       ├── relay/             loopback HTTP/WebSocket and security checks
+│       ├── client/            thin-process protocol, tools and file I/O
+│       ├── extension/         extension connection, pairing, ping
+│       ├── cdp/               Chrome DevTools Protocol transport
+│       ├── browser/           slots, public tab IDs, claims
+│       ├── engine/            commands, snapshots, locators, actions, output
+│       ├── pairing/           ECDSA identity and the six-digit code
+│       └── daemon/            lifecycle, ports, daemon.json
+└── docs/                      architecture, protocol, migration, benchmarks
+```
 
-| Folder                    | Package                      | What it is                                                                                       |
-| ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| `packages/mcp`            | `@browsermcp/mcp`            | The MCP server and the daemon ([README](packages/mcp/README.md))                                 |
-| `packages/protocol`       | `@browsermcp/protocol`       | Extension↔daemon protocol, including pairing                                                     |
-| `packages/extension-core` | `@browsermcp/extension-core` | Browser control for the extension: connection, pairing, debugger relay, tab rules, groups, badge |
-| `apps/extension`          | `@browsermcp/extension`      | The extension built from this repo: browser control and popup                                    |
-| `go`                      | `browsermcpd`                | The Go daemon and native browser engine                                                          |
-| `docs`                    | —                            | Architecture, migration and benchmark documents                                                  |
+Each layer has one job:
+
+| Layer                    | Responsibility                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| **MCP server**           | One per AI app. Translates MCP over stdio into a loopback session and serves the app's files.  |
+| **Relay**                | Owns the loopback port and the security boundary: Host, token, extension origins, payload cap. |
+| **Extension connection** | One per browser profile: handshake, pairing code, requests, events, liveness.                  |
+| **CDP transport**        | Claims a tab, sends DevTools commands, passes child-frame events.                              |
+| **Browser registry**     | Which profiles are connected, which tabs exist, their public IDs, and which are claimed.       |
+| **Command engine**       | Parses command lines, runs them in order, keeps sessions and tab locks, and shapes the output. |
 
 ## Development
 
@@ -322,9 +365,9 @@ Press **Stop** in the popup (or Cancel on the browser's debugging bar). Agent ca
 </details>
 
 <details>
-<summary><b>Why one tool instead of dozens?</b></summary>
+<summary><b>Why one tool?</b></summary>
 
-Every tool definition costs tokens on every turn, and every call is a round trip. One `browser` tool that accepts many command lines lets the agent batch a workflow, print one status line per action, and read only what it asks for.
+A small, stable interface keeps the agent's context focused, and one call can carry many command lines, so a workflow does not need a round trip per step. Reads print only what was asked for.
 </details>
 
 <details>
