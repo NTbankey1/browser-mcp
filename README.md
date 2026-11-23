@@ -1,6 +1,6 @@
 # Browser MCP
 
-**Your own Chrome, driven by AI apps.** Claude Code, Cursor, VS Code, Codex and Claude Desktop use your signed-in sites, your profile and real tabs — while everything stays on your computer.
+**Your own browser, driven by AI apps.** Claude Code, Cursor, VS Code, Codex and Claude Desktop use your signed-in sites, your profile and real tabs in Chrome, Edge, Brave, Arc or another Chromium browser — while everything stays on your computer.
 
 [**Website**](https://browsermcp.io) · [**Docs**](https://browsermcp.io/docs) · [**Extension**](https://chromewebstore.google.com/detail/bjfgambnhccakkhmkepdoekmckoijdlc) · [**npm**](https://www.npmjs.com/package/@browsermcp/mcp) · [**Apache-2.0**](LICENSE)
 
@@ -28,7 +28,7 @@
 |                                 |                                                                                                                                                |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Your session, not a sandbox** | The agent works in your profile: signed-in sites, cookies, extensions, the tabs you already have.                                              |
-| **Real Chrome**                 | Chromium browsers with the `debugger` API: Chrome, Edge, Brave, Arc. No bundled browser, no separate profile.                                  |
+| **Your real browser**           | Chrome, Edge, Brave, Arc and other Chromium browsers, through the `debugger` API. No bundled browser, no separate profile.                     |
 | **One small tool**              | A single `browser` tool takes many command lines in one call, so an agent can plan a whole workflow instead of one round trip per click.       |
 | **Tabs of their own**           | Agents open background tabs in a group named after the app, colored per app, with a toolbar badge showing who is acting. Your tabs stay yours. |
 | **Local and permissioned**      | Loopback only, six-digit pairing, **Stop**/Resume, no incognito unless you allow it, no browser or extension pages.                            |
@@ -40,7 +40,7 @@
 flowchart LR
   A["AI app<br/>Claude Code, Cursor, VS Code…"] -->|"stdio · MCP"| B["MCP server<br/>one per app"]
   B -->|"ws · 127.0.0.1"| C["Daemon<br/>one per user"]
-  C -->|"ws · 127.0.0.1"| D["Chrome extension<br/>chrome.debugger relay"]
+  C -->|"ws · 127.0.0.1"| D["Browser extension<br/>chrome.debugger relay"]
   D --> E["Tab<br/>your profile, signed in"]
 ```
 
@@ -110,7 +110,7 @@ pnpm install
 pnpm build
 ```
 
-1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick `apps/extension/.output/chrome-mv3`. It is called **"Browser MCP (self-built)"**.
+1. Open your browser's extensions page (`chrome://extensions`, `edge://extensions`, `brave://extensions`), turn on **Developer mode**, click **Load unpacked**, and pick `apps/extension/.output/chrome-mv3`. It is called **"Browser MCP (self-built)"**.
 2. Run the server you built in your AI app:
 
    ```json
@@ -185,7 +185,7 @@ The engine parses every line first (a typo runs none of it), then runs them in o
 | `tab new [<url>]`                             | Opens a background tab of the agent's own, in its app group. `--browser "<name>"` opens it elsewhere. |
 | `tab select <id>`                             | Switches to any tab, including the user's.                                                            |
 | `tab close [<id>]`                            | Closes a tab the agent opened.                                                                        |
-| `browser list` · `browser use "<name>"\|<id>` | Lists connected browsers (Chrome profiles) and chooses where new tabs open.                           |
+| `browser list` · `browser use "<name>"\|<id>` | Lists connected browsers (profiles) and chooses where new tabs open.                                  |
 
 ### Targets
 
@@ -199,8 +199,8 @@ A target is any of:
 
 ## Several browsers and tabs
 
-- The daemon connects up to **8 Chrome profiles** at once and names them `Chrome`, `Chrome 2`, or by the label you set in the popup.
-- Chrome's tab IDs only mean something inside one profile, so the daemon gives every tab a **public ID** that works across all of them.
+- The daemon connects up to **8 browser profiles** at once and names them after the browser (`Chrome`, `Edge`, `Brave`…, numbered when there are several), or by the label you set in the popup.
+- Browser tab IDs only mean something inside one profile, so the daemon gives every tab a **public ID** that works across all of them.
 - New tabs open in the browser of the tab the session last used, or the one the user focused last. `browser use "<name>"` changes that; `tab new --browser "<name>"` changes it for one tab.
 - Pairing, Stop, activity and tab releases are **per browser**: one profile waiting for **Allow** does not stop agents in another.
 
@@ -211,8 +211,8 @@ A target is any of:
 | **Loopback only**     | The server binds `127.0.0.1`; the Host header is checked against DNS rebinding.                                                                                                                                                                          |
 | **Six-digit pairing** | The daemon's ECDSA P-256 key signs a challenge bound to the port; a commitment and reveal produce a code both sides show. Click **Allow** once per computer.                                                                                             |
 | **Token**             | `/client` and `/shutdown` require a random token from `daemon.json`, compared in constant time.                                                                                                                                                          |
-| **Extension rules**   | No incognito tabs unless you allow the extension in incognito; no `chrome://`, extension pages or the Web Store; nothing while **Stop** is pressed.                                                                                                      |
-| **Stop / Resume**     | The popup (or Cancel on Chrome's debugging bar) freezes agent actions; Resume restores them.                                                                                                                                                             |
+| **Extension rules**   | No incognito tabs unless you allow the extension in incognito; no browser pages (`chrome://`, `edge://`…), extension pages or the Web Store; nothing while **Stop** is pressed.                                                                          |
+| **Stop / Resume**     | The popup (or Cancel on the browser's debugging bar) freezes agent actions; Resume restores them.                                                                                                                                                        |
 | **Tab ownership**     | Agents open their own tabs and may close only those; your tabs stay unless they select one.                                                                                                                                                              |
 | **Files**             | Uploads and downloads use the AI app's permissions and MCP roots. Relative paths resolve against the app's root; `~` is your home directory. Nothing limits which files a page-driven agent could read or overwrite, so treat browsed pages accordingly. |
 | **Local state**       | `~/.browsermcp/` is 0700; `daemon.json` and `identity.json` are 0600 and written atomically.                                                                                                                                                             |
@@ -294,17 +294,17 @@ The smoke test writes screenshots and daemon logs to `apps/extension/.output/smo
 <details>
 <summary><b>Does the AI see my passwords and cookies?</b></summary>
 
-It sees what it can read from the tabs it browses, using your session. It cannot read your Chrome password manager, and Browser MCP sends nothing to a third party. Treat a page you let an agent browse as readable by that agent, and its files as writable (uploads and downloads run with your permissions).
+It sees what it can read from the tabs it browses, using your session. It cannot read your browser's password manager, and Browser MCP sends nothing to a third party. Treat a page you let an agent browse as readable by that agent, and its files as writable (uploads and downloads run with your permissions).
 </details>
 
 <details>
 <summary><b>Which browsers work?</b></summary>
 
-Chromium browsers with the `debugger` API: Chrome, Edge, Brave, Arc and similar. Firefox has no `debugger` API, so it does not work there.
+Chromium browsers with the `debugger` API: Chrome, Edge, Brave, Arc, Opera, Vivaldi and similar. Firefox and Safari have no equivalent API, so Browser MCP does not work there. The extension is a standard Chromium (Manifest V3) extension; in Edge or Brave, install it from the Chrome Web Store where the browser allows that, or load the build from source.
 </details>
 
 <details>
-<summary><b>Can I use several Chrome profiles?</b></summary>
+<summary><b>Can I use several browser profiles?</b></summary>
 
 Yes — up to 8 at once. Each connects as its own browser and pairs separately. Tabs keep public IDs across all of them, and `tab list` names each tab's browser.
 </details>
@@ -318,7 +318,7 @@ Yes, if the agent selects one. By default it opens background tabs in a group na
 <details>
 <summary><b>Can I stop it?</b></summary>
 
-Press **Stop** in the popup (or Cancel on Chrome's debugging bar). Agent calls fail until you press **Resume**.
+Press **Stop** in the popup (or Cancel on the browser's debugging bar). Agent calls fail until you press **Resume**.
 </details>
 
 <details>
@@ -330,7 +330,7 @@ Every tool definition costs tokens on every turn, and every call is a round trip
 <details>
 <summary><b>Where does state live?</b></summary>
 
-`~/.browsermcp/` (0700): `daemon.json` (port, pid, token; 0600), `identity.json` (pairing key; 0600), `daemon.log`, and optionally `dev-extension-ids`. The extension keeps its own pairing decision in Chrome's storage.
+`~/.browsermcp/` (0700): `daemon.json` (port, pid, token; 0600), `identity.json` (pairing key; 0600), `daemon.log`, and optionally `dev-extension-ids`. The extension keeps its own pairing decision in the browser's extension storage.
 </details>
 
 ## Contributing and security
