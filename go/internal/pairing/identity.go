@@ -106,6 +106,8 @@ func createIdentity(file string) (*Identity, error) {
 	}
 	tempName := temp.Name()
 	defer os.Remove(tempName)
+	// 0600 on POSIX. On Windows this only clears the read-only attribute; the
+	// key inherits the directory's NTFS ACL (owner, SYSTEM, Administrators).
 	if err := temp.Chmod(0o600); err != nil {
 		temp.Close()
 		return nil, err
