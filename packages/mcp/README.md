@@ -65,6 +65,26 @@ TypeScript engine. Build it with `pnpm --filter @browsermcp/mcp go:build`;
 `BROWSER_MCP_GO_DAEMON` overrides the binary path. Unset the variable to roll
 back. Measured startup, memory and the trade-offs: `docs/go-migration/phase-3-go-front-door.md`.
 
+### Native Go engine (opt-in)
+
+`BROWSER_MCP_ENGINE=native` (together with `BROWSER_MCP_DAEMON=go`) runs the
+browser automation itself in `bin/browsermcpd`: no Node worker and no
+Playwright. The daemon still accepts `/client` and `/extension` on the same
+loopback port, speaks the same protocols, and the extension is unchanged.
+
+```sh
+pnpm --filter @browsermcp/mcp go:build
+BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native node packages/mcp/dist/index.js
+```
+
+Status: the tool's commands are implemented natively and the repository's
+real-extension smoke test passes 20/20 with this engine. It is **not** the
+default: large-page snapshots are slower than Playwright's, and a few behaviours
+differ (raw `cdp` session isolation, cross-origin `frameLocator`). See
+`docs/migration/COMPATIBILITY_MATRIX.md`. Unset `BROWSER_MCP_ENGINE` to go back
+to the Node engine; `docs/migration/ROLLBACK.md` has the details. Architecture,
+protocol and measurements: `docs/architecture/` and `docs/benchmarks/`.
+
 ## Development
 
 - `pnpm build` builds `dist/index.js` (the `bin`) and `dist/daemon.js`; `pnpm watch` rebuilds on changes.

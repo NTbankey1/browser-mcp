@@ -14,8 +14,16 @@ documented phase by phase:
 Benchmarks live in [`bench-results/`](bench-results/); smoke logs in
 [`e2e-logs/`](e2e-logs/).
 
-**Current recommendation:** the hybrid is functionally complete and tested, but
-it costs more memory than the Node daemon while the engine worker is resident.
-For daily use, the Node daemon is still the better default. The native Go engine
-(replacing Playwright) is the only way to keep the Go memory win during browser
-use; it is a separate, larger project and is not implemented.
+The native Go engine (no Node worker, no Playwright) is documented separately:
+[`docs/architecture/`](../architecture/), [`docs/migration/`](../migration/) and
+[`docs/benchmarks/`](../benchmarks/). It is opt-in with
+`BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`; the Node daemon remains the
+default and the rollback path.
+
+**Current recommendation:** the native Go engine is implemented and passes the
+real-extension smoke test 20/20, with ~17 MB vs ~84 MB RSS during use and equal
+or better latency for most commands. It remains opt-in while the compatibility
+matrix's deviations (raw `cdp` session isolation, cross-origin `frameLocator`,
+large-page snapshot decoding) are open; the Node daemon is still the default.
+The hybrid front door is no longer the recommended way to get Go's idle win:
+the native engine keeps that win during browser use as well.
