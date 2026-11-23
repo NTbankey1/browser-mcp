@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -21,8 +22,15 @@ func TestLoadOrCreateKeepsTheKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode := info.Mode().Perm(); mode != 0o600 {
-		t.Fatalf("identity.json mode is %o, want 600", mode)
+	// Windows has no POSIX mode bits: os.Chmod maps 0600 to the read-only
+	// attribute, and os.Stat reports 0666. There the private key relies on the
+	// NTFS ACL inherited from BROWSER_MCP_HOME / the user's profile (the owner,
+	// SYSTEM and Administrators). Only the mode assertion is POSIX-specific;
+	// the reload, signing and verification checks below still run on Windows.
+	if runtime.GOOS != "windows" {
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Fatalf("identity.json mode is %o, want 600", mode)
+		}
 	}
 	second, err := LoadOrCreate(home)
 	if err != nil {
