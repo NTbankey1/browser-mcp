@@ -416,28 +416,17 @@ const URL_ARG = (args: ParsedArgs) => positional(args, 0, "<url>");
 export const COMMANDS: CommandDef[] = [
   {
     name: "goto",
-    usage:
-      "goto <url> [--wait commit|dom|load]   # the first goto opens a background tab of your own",
-    help: "Opens a URL in the current tab (the first time, in a new background tab of your own). Waits for the load event (up to 10 s); `--wait dom` returns at DOMContentLoaded and `--wait commit` as soon as the new document is committed, with its resources still loading.",
+    usage: "goto <url>   # the first goto opens a background tab of your own",
+    help: "Opens a URL in the current tab (the first time, in a new background tab of your own). Waits for the load event (up to 10 s).",
     navigates: true,
     noPage: true,
-    flags: { wait: true },
     maxArgs: 1,
     timeoutMs: () => NAVIGATION_STEP_MS,
     async run(ctx) {
       const url = normalizeUrl(URL_ARG(ctx.args));
-      const wait = ctx.args.flags.wait;
-      const mode = wait === undefined ? "load" : String(wait);
-      if (!["commit", "dom", "load"].includes(mode)) {
-        throw new StepError("--wait is commit, dom or load");
-      }
       const page = await ctx.pageForGoto();
-      await page.goto(url, {
-        waitUntil: mode === "dom" ? "domcontentloaded" : "commit",
-        timeout: 30_000,
-      });
-      if (mode === "load" && !(await waitForLoad(page)))
-        ctx.note("the page is still loading");
+      await page.goto(url, { waitUntil: "commit", timeout: 30_000 });
+      if (!(await waitForLoad(page))) ctx.note("the page is still loading");
       if (page.url() !== url && page.url() !== `${url}/`)
         ctx.note(`→ ${page.url()}`);
     },
