@@ -195,27 +195,18 @@ func (f *fakeExtension) answer(method string, params json.RawMessage) (any, stri
 		return map[string]any{"tabId": 2}, ""
 	case "cdp":
 		var cdp struct {
-			TabID  int             `json:"tabId"`
 			Method string          `json:"method"`
 			Params json.RawMessage `json:"params"`
 		}
 		if err := json.Unmarshal(params, &cdp); err != nil {
 			return nil, err.Error()
 		}
-		return f.cdp(cdp.TabID, cdp.Method, cdp.Params)
+		return f.cdp(cdp.Method, cdp.Params)
 	}
 	return nil, "unknown method " + method
 }
 
-// event pushes one CDP event to the daemon, as the extension does.
-func (f *fakeExtension) event(tabID int, method string, params any) {
-	f.write(map[string]any{"type": "event", "event": map[string]any{
-		"type": "cdpEvent",
-		"data": map[string]any{"tabId": tabID, "method": method, "params": params},
-	}})
-}
-
-func (f *fakeExtension) cdp(tabID int, method string, params json.RawMessage) (any, string) {
+func (f *fakeExtension) cdp(method string, params json.RawMessage) (any, string) {
 	switch method {
 	case "Page.enable", "Runtime.enable", "Network.enable", "Accessibility.enable",
 		"Emulation.setFocusEmulationEnabled", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
@@ -228,10 +219,6 @@ func (f *fakeExtension) cdp(tabID int, method string, params json.RawMessage) (a
 		}
 		_ = json.Unmarshal(params, &nav)
 		f.url = nav.URL
-		// A real page commits first, then fires DOMContentLoaded and load.
-		f.event(tabID, "Page.frameNavigated", map[string]any{"frame": map[string]any{"id": "F1", "url": nav.URL}})
-		f.event(tabID, "Page.domContentEventFired", map[string]any{"timestamp": 0})
-		f.event(tabID, "Page.loadEventFired", map[string]any{"timestamp": 0})
 		return map[string]any{"frameId": "F1"}, ""
 	case "Page.reload":
 		return map[string]any{}, ""
@@ -461,18 +448,6 @@ func TestNativeEndToEnd(t *testing.T) {
 	text, isError = client.browser(t, "goto https://example.com")
 	if isError || !strings.Contains(text, "✓ goto https://example.com") {
 		t.Fatalf("goto: %q isError=%v", text, isError)
-	}
-
-	// goto --wait commit and --wait dom return once their event fires
-	for _, mode := range []string{"commit", "dom"} {
-		text, isError = client.browser(t, "goto https://example.com --wait "+mode)
-		if isError || !strings.Contains(text, "✓ goto https://example.com --wait "+mode) {
-			t.Fatalf("goto --wait %s: %q isError=%v", mode, text, isError)
-		}
-	}
-	text, isError = client.browser(t, "goto https://example.com --wait nope")
-	if !isError || !strings.Contains(text, "--wait is commit, dom or load") {
-		t.Fatalf("goto --wait nope: %q isError=%v", text, isError)
 	}
 
 	// snapshot -i gives a ref

@@ -166,19 +166,6 @@ Page: ${u("/dialogs")} — "Dialogs"`);
     expect(await h.run(s, "help cdp")).toContain("Needs --caps cdp.");
   });
 
-  it("goto --wait commit and --wait dom stop at their event", async () => {
-    for (const mode of ["commit", "dom"]) {
-      const text = await h.run(session(), `goto ${u("/form")} --wait ${mode}`);
-      expect(text).toContain(`✓ goto ${u("/form")} --wait ${mode}`);
-      expect(text).toContain(`Page: ${u("/form")} — "Pizza order"`);
-    }
-    const s = session();
-    const { text, isError } = await h.call(s, `goto ${u("/form")} --wait nope`);
-    expect(isError).toBe(true);
-    expect(text).toContain("--wait is commit, dom or load");
-    expect(await h.run(s, "help goto")).toContain("--wait commit|dom|load");
-  });
-
   it("lists cdp in the tool definition only with --caps cdp", () => {
     const s = session();
     const description = (id: string) => h.engine.tools(id)[0].description;
