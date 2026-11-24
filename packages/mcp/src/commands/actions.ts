@@ -62,7 +62,14 @@ export async function resolveOne(
 }
 
 type Actionability =
-  | { ok: true; retargeted: boolean }
+  | {
+      ok: true;
+      retargeted: boolean;
+      /** The element's center, in viewport coordinates, when it's in the page's main frame */
+      x: number;
+      y: number;
+      mainFrame: boolean;
+    }
   | { ok: false; reason: "hidden" | "disabled" | "outside" }
   | { ok: false; reason: "covered"; by: string };
 
@@ -133,12 +140,22 @@ async function checkActionable(
       }
       return false;
     };
-    if (!hit || within(hit)) return { ok: true, retargeted: false };
+    // Playwright's `boundingBox()` adds a subframe's offset to the main frame's; a viewport point is only right in the main frame
+    let mainFrame = true;
+    try {
+      mainFrame =
+        el.ownerDocument === el.ownerDocument.defaultView!.top!.document;
+    } catch {
+      mainFrame = false;
+    }
+    if (!hit || within(hit)) {
+      return { ok: true, retargeted: false, x, y, mainFrame };
+    }
     // A label for the element, e.g. a styled checkbox, receives the click for it
     if ((el as HTMLInputElement).labels) {
       for (const label of (el as HTMLInputElement).labels ?? []) {
         if (label === hit || label.contains(hit)) {
-          return { ok: true, retargeted: false };
+          return { ok: true, retargeted: false, x, y, mainFrame };
         }
       }
     }
@@ -171,6 +188,10 @@ export async function preparePointer(
   for (;;) {
     const { state, handle: target } = await checkActionable(handle);
     if (state.ok) {
+      // The check already found the center, in the main frame's viewport; only a subframe element needs `boundingBox()`
+      if (state.mainFrame) {
+        return { handle: target, x: state.x, y: state.y };
+      }
       const box = await target.boundingBox();
       if (box) {
         return {
@@ -299,12 +320,12 @@ export async function waitForLoad(
 
 // --- Settling ---
 
-/** How long after an action a navigation may start and still be waited for */
-const NAVIGATION_START_MS = 500;
+/** How long after an action a navigation may start and still be waited for. A handler that navigates does so at once (a link, a submit, `location.href = …`) or after a fetch; 200 ms keeps the wait off the common no-navigation path while still catching those */
+const NAVIGATION_START_MS = 200;
 const NAVIGATION_LOAD_MS = 10_000;
 
 /**
- * Runs an action, then waits for a navigation it started within 500 ms to load (up to 10 s), so the next step sees the new page. Returns whether the load timed out
+ * Runs an action, then waits for a navigation it started within 200 ms to load (up to 10 s), so the next step sees the new page. Returns whether the load timed out
  */
 export async function withSettle<T>(
   page: Page,

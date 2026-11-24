@@ -40,10 +40,11 @@ func init() {
 	commands = []*CommandDef{
 		{
 			Name:      "goto",
-			Usage:     "goto <url>   # the first goto opens a background tab of your own",
-			Help:      "Opens a URL in the current tab (the first time, in a new background tab of your own). Waits for the load event (up to 10 s).",
+			Usage:     "goto <url> [--wait commit|dom|load]   # the first goto opens a background tab of your own",
+			Help:      "Opens a URL in the current tab (the first time, in a new background tab of your own). Waits for the load event (up to 10 s); `--wait dom` returns at DOMContentLoaded and `--wait commit` as soon as the new document is committed, with its resources still loading.",
 			Navigates: true,
 			NoPage:    true,
+			Flags:     FlagSpec{"wait": true},
 			MaxArgs:   1,
 			Timeout:   func(ParsedArgs) time.Duration { return 45 * time.Second },
 			Run:       runGoto,
@@ -268,11 +269,19 @@ func runGoto(ctx context.Context, c *stepContext) error {
 	if err != nil {
 		return err
 	}
+	mode := WaitLoad
+	if value, ok := c.args.Value("wait"); ok {
+		parsed, valid := ParseWaitMode(value)
+		if !valid {
+			return stepErrorf("--wait is commit, dom or load")
+		}
+		mode = parsed
+	}
 	state, err := c.pageForGoto(ctx)
 	if err != nil {
 		return err
 	}
-	if loaded, err := navigate(ctx, state.Tab, normalizeURL(raw)); err != nil {
+	if loaded, err := navigate(ctx, state.Tab, normalizeURL(raw), mode); err != nil {
 		return err
 	} else if !loaded {
 		c.Note("the page is still loading")
@@ -773,7 +782,7 @@ func runTab(ctx context.Context, c *stepContext) error {
 			if err != nil {
 				return err
 			}
-			if loaded, err := navigate(ctx, state.Tab, normalizeURL(url)); err != nil {
+			if loaded, err := navigate(ctx, state.Tab, normalizeURL(url), WaitLoad); err != nil {
 				return err
 			} else if !loaded {
 				c.Note("the page is still loading")

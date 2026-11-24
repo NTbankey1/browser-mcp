@@ -608,12 +608,114 @@ func waitForLoad(ctx context.Context, tab *cdp.Tab, timeout time.Duration) bool 
 	return false
 }
 
-// navigate goes to url and waits for the load event.
-func navigate(ctx context.Context, tab *cdp.Tab, url string) (bool, error) {
-	if _, err := tab.Send(ctx, "Page.navigate", map[string]any{"url": url}); err != nil {
+// WaitMode is how much of a navigation `goto` waits for.
+type WaitMode int
+
+const (
+	// WaitLoad waits for the load event (the default).
+	WaitLoad WaitMode = iota
+	// WaitDOM waits for DOMContentLoaded.
+	WaitDOM
+	// WaitCommit returns once the new document is committed; its scripts and
+	// resources keep loading in the background.
+	WaitCommit
+)
+
+// ParseWaitMode reads a `--wait` value.
+func ParseWaitMode(value string) (WaitMode, bool) {
+	switch value {
+	case "load":
+		return WaitLoad, true
+	case "dom":
+		return WaitDOM, true
+	case "commit":
+		return WaitCommit, true
+	}
+	return WaitLoad, false
+}
+
+// navigate goes to url and waits as mode says. Commit and DOM subscribe before
+// sending the navigation, so a fast event is not missed.
+func navigate(ctx context.Context, tab *cdp.Tab, url string, mode WaitMode) (bool, error) {
+	if mode == WaitLoad {
+		if _, err := tab.Send(ctx, "Page.navigate", map[string]any{"url": url}); err != nil {
+			return false, err
+		}
+		return waitForLoad(ctx, tab, NavigationLoad), nil
+	}
+	type navEvent struct {
+		frameID string
+		commit  bool
+		dom     bool
+		within  bool
+	}
+	events := make(chan navEvent, 8)
+	unsubscribeCommit := tab.On("Page.frameNavigated", func(_ string, params json.RawMessage) {
+		var event struct {
+			Frame struct {
+				ID string `json:"id"`
+			} `json:"frame"`
+		}
+		_ = json.Unmarshal(params, &event)
+		select {
+		case events <- navEvent{frameID: event.Frame.ID, commit: true}:
+		default:
+		}
+	})
+	defer unsubscribeCommit()
+	unsubscribeWithin := tab.On("Page.navigatedWithinDocument", func(string, json.RawMessage) {
+		select {
+		case events <- navEvent{within: true}:
+		default:
+		}
+	})
+	defer unsubscribeWithin()
+	unsubscribeDOM := tab.On("Page.domContentEventFired", func(string, json.RawMessage) {
+		select {
+		case events <- navEvent{dom: true}:
+		default:
+		}
+	})
+	defer unsubscribeDOM()
+	result, err := tab.Send(ctx, "Page.navigate", map[string]any{"url": url})
+	if err != nil {
 		return false, err
 	}
-	return waitForLoad(ctx, tab, NavigationLoad), nil
+	var reply struct {
+		FrameID string `json:"frameId"`
+	}
+	_ = json.Unmarshal(result, &reply)
+	deadline := time.Now().Add(NavigationLoad)
+	committed := false
+	for time.Now().Before(deadline) {
+		select {
+		case event := <-events:
+			if event.within {
+				return true, nil
+			}
+			if event.commit && (reply.FrameID == "" || event.frameID == reply.FrameID) {
+				committed = true
+				if mode == WaitCommit {
+					return true, nil
+				}
+			}
+			if mode == WaitDOM && event.dom {
+				return true, nil
+			}
+		case <-time.After(50 * time.Millisecond):
+			// After the commit, readyState covers pages restored from the
+			// back/forward cache that never fire DOMContentLoaded.
+			if mode == WaitDOM && committed {
+				var ready string
+				if err := tab.Eval(ctx, "document.readyState", &ready); err == nil && (ready == "interactive" || ready == "complete") {
+					return true, nil
+				}
+			}
+		case <-ctx.Done():
+			return false, nil
+		}
+	}
+	return false, nil
 }
 
 func historyMove(ctx context.Context, tab *cdp.Tab, delta int) error {

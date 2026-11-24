@@ -273,7 +273,13 @@ class Engine implements CommandEngine {
     const out: string[] = [];
     const images: ImageContent[] = [];
     await this.lockTab(session, tabLock);
-    const start = await this.pageInfo(session);
+    // Reads can't change the URL or title, so a call of reads only needs them compared when something went wrong
+    const acted = lines.some(
+      (line) => !line.def.reads || line.def.name === "eval",
+    );
+    const start = await this.pageInfo(session, { withTitle: acted });
+    /** A step navigated or changed the URL */
+    let navigated = false;
     let failed = false;
     let stoppedBy: string | null = null;
     /** The last step's `→ <url>` note, dropped when the trailer says the same */
@@ -318,7 +324,12 @@ class Engine implements CommandEngine {
             `${dialogLabel(state.dialog)} is open. Answer it with \`dialog accept\` or \`dialog dismiss\` first`,
           );
         }
-        const before = tabId === null ? null : await this.quickInfo(tabId);
+        // Only a step that can act (or `eval`) can change the tab's URL; a read doesn't need the before/after check
+        const tracksUrl = !def.reads || name === "eval";
+        const before =
+          tracksUrl && tabId !== null
+            ? await this.quickInfo(tabId, { withTitle: false })
+            : null;
         const errorsBefore = state?.errorCount ?? 0;
         // Windows each tab opened that weren't reported before this step, so the step waits only for its own
         const unreportedBefore = new Map(
@@ -339,7 +350,11 @@ class Engine implements CommandEngine {
           stepTimeout(def, args),
         );
         tabId = this.currentTab(session);
-        const after = tabId === null ? null : await this.quickInfo(tabId);
+        const after =
+          tracksUrl && tabId !== null
+            ? await this.quickInfo(tabId, { withTitle: false })
+            : null;
+        if (def.navigates) navigated = true;
         if (
           !def.navigates &&
           before &&
@@ -347,6 +362,7 @@ class Engine implements CommandEngine {
           before.tabId === after.tabId &&
           before.url !== after.url
         ) {
+          navigated = true;
           notes.push(`→ ${shortUrl(after.url, before.url)}`);
           urlNote = {
             line: out.length,
@@ -398,7 +414,9 @@ class Engine implements CommandEngine {
       }
     }
 
-    const end = await this.pageInfo(session);
+    const end = await this.pageInfo(session, {
+      withTitle: acted || navigated || failed,
+    });
     if (
       end &&
       (failed ||
@@ -805,19 +823,30 @@ class Engine implements CommandEngine {
   // --- Output ---
 
   /** The current tab's URL and title, without claiming it */
-  private async pageInfo(session: Session) {
+  private async pageInfo(
+    session: Session,
+    options: { withTitle?: boolean } = {},
+  ) {
     const tabId = this.currentTab(session);
-    return tabId === null ? null : this.quickInfo(tabId);
+    return tabId === null ? null : this.quickInfo(tabId, options);
   }
 
-  private async quickInfo(tabId: number) {
+  /**
+   * The tab's URL and title, read from the Page: the extension reports both a moment after they change, and the tool shows the page's own. `withTitle: false` skips the title (a CDP round trip) for callers that only compare URLs: the trailer and the per-step URL check
+   */
+  private async quickInfo(
+    tabId: number,
+    options: { withTitle?: boolean } = {},
+  ) {
     const state = this.states.get(tabId);
     if (state && !state.page.isClosed()) {
+      const url = state.page.url();
+      if (options.withTitle === false) return { tabId, url, title: "" };
       const title = await Promise.race([
         state.page.title().catch(() => ""),
         new Promise<string>((resolve) => setTimeout(() => resolve(""), 1000)),
       ]);
-      return { tabId, url: state.page.url(), title };
+      return { tabId, url, title };
     }
     const tab = this.backend.tabs().find((t) => t.tabId === tabId);
     return tab ? { tabId, url: tab.url, title: tab.title } : null;
