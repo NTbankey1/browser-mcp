@@ -1,15 +1,36 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect x="6" y="9" width="12" height="9" fill="white"/>
-<path d="M12 8.4V4.8H8.4" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M17.4 8.40001H6.6C5.60589 8.40001 4.8 9.2059 4.8 10.2V17.4C4.8 18.3941 5.60589 19.2 6.6 19.2H17.4C18.3941 19.2 19.2 18.3941 19.2 17.4V10.2C19.2 9.2059 18.3941 8.40001 17.4 8.40001Z" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3 13.8H4.8" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M19.2 13.8H21" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.7 12.9V14.7" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M9.3 12.9V14.7" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12 8.4V4.8H8.4" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M17.4 8.40001H6.6C5.60589 8.40001 4.8 9.2059 4.8 10.2V17.4C4.8 18.3941 5.60589 19.2 6.6 19.2H17.4C18.3941 19.2 19.2 18.3941 19.2 17.4V10.2C19.2 9.2059 18.3941 8.40001 17.4 8.40001Z" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3 13.8H4.8" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M19.2 13.8H21" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.7 12.9V14.7" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M9.3 12.9V14.7" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="14" y1="6" x2="114" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="0.55" stop-color="#5B4BE0"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="20" y1="12" x2="108" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="cursor" x1="60" y1="52" x2="76" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <filter id="shadow" x="16" y="26" width="96" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#1E1B4B" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <!-- app tile -->
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <rect width="128" height="128" rx="30" fill="url(#sheen)"/>
+
+  <!-- browser window -->
+  <g filter="url(#shadow)">
+    <rect x="24" y="32" width="80" height="64" rx="15" fill="#FFFFFF"/>
+  </g>
+  <path d="M24 49H104" stroke="#E0E7FF" stroke-width="2"/>
+  <circle cx="37" cy="40.5" r="3.2" fill="#818CF8"/>
+  <circle cx="48" cy="40.5" r="3.2" fill="#A5B4FC"/>
+  <circle cx="59" cy="40.5" r="3.2" fill="#C7D2FE"/>
+
+  <!-- pointer: the agent driving the page -->
+  <path d="M54 54L54 86L62.5 78L68.5 91.5L76 88L70 75L82 75L54 54Z" fill="url(#cursor)"/>
 </svg>
