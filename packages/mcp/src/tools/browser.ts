@@ -48,7 +48,7 @@ export function browserDescription(
     ...capabilities.map((capability) => CAPABILITY_COMMANDS[capability]),
   ];
   return [
-    "Controls the user's Chrome. Runs one command per line, stopping at the first error. Actions print one ✓ line, reads print their output. Do many steps per call.",
+    "Controls the user's browser. Use it when the task needs the real browser: a signed-in site, a page that needs its JavaScript, or a UI to click or type in; for a static public page, use the app's web fetch instead. Runs one command per line, stopping at the first error. Actions print one ✓ line, reads print their output. Do many steps per call.",
     ...EVERYDAY,
     `More (help <command>): ${more.join(", ")}`,
     "Targets: e12 (a snapshot ref), getByRole('button', { name: 'Go' }), getByLabel/getByText/getByPlaceholder('…'), or CSS.",
