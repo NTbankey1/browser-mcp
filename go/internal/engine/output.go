@@ -38,6 +38,7 @@ const (
 	CodeDialog       = "dialog-open"
 	CodeDisconnected = "disconnected"
 	CodeRefused      = "refused"
+	CodeVisualDiff   = "visual-diff"
 )
 
 // classify picks the code for a message, or "" when it fits none.
@@ -54,6 +55,8 @@ func classify(message string) string {
 		return CodeDisconnected
 	case strings.Contains(lower, "doesn't allow"), strings.Contains(lower, "isn't allowed"), strings.Contains(lower, "not allowed"):
 		return CodeRefused
+	case strings.Contains(lower, "differs from"):
+		return CodeVisualDiff
 	case strings.HasPrefix(message, "HTTP "):
 		return CodeHTTP
 	}

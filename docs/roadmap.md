@@ -16,8 +16,8 @@ Status is what the code does today, not what a command's name suggests.
 | Cookie and storage management            | **Refused by design** | `cdp-policy.ts` denies the methods; see [security.md](security.md)                                                                                          |
 | Download and upload lifecycle            | **Exists**            | page fetch → anonymous fallback; upload staging kept 10 minutes                                                                                             |
 | Multi-tab and session isolation          | **Exists**            | `tab list/new/select/close`, one tab group per AI app                                                                                                       |
-| Visual automation                        | **Partial**           | `screenshot`, `pdf`; no visual assertions or element finding by image                                                                                       |
-| Workflow execution                       | **Exists**            | a call is a script of commands, one per line                                                                                                                |
+| Visual automation                        | **Exists**            | `screenshot --expect` compares against a baseline; `pdf`; no element finding by image                                                                       |
+| Workflow execution                       | **Exists**            | a call is a script of commands, one per line; `session save`/`restore` keeps an app's tabs across calls                                                     |
 | Logging and tracing                      | **Exists**            | step lines, `console`, `requests`, `request --body`, and `BROWSER_MCP_TRACE_DIR` for a per-call JSONL trace                                                 |
 | Security and prompt-injection protection | **Exists (opt-in)**   | page text is data; `BROWSER_MCP_ALLOW_DOMAINS` limits navigation; `BROWSER_MCP_CONFIRM=1` reports writes instead of doing them; credential headers redacted |
 
@@ -43,18 +43,23 @@ Status is what the code does today, not what a command's name suggests.
    commands, the lines the tool returned, failure flag and duration — to
    `calls.jsonl`. The file holds page text, so it is `0600` under a `0700`
    directory.
+9. **Visual assertions.** `screenshot --expect <file>` writes the baseline on
+   the first run and fails with `[visual-diff]` when a later screenshot differs
+   from it byte for byte.
+10. **Session snapshot.** `session save <file>` writes the app's tabs (URLs and
+    which one was current); `session restore <file>` opens them again and makes
+    the saved current tab current. Restore honours the allowlist.
 
 ## Still open
 
-9. **Visual assertions.** `screenshot` exists, but nothing compares against a
-   baseline.
-10. **Session snapshot/restore.** A job that must survive a restart cannot save
-    its tabs and cookies (the latter by design).
+11. **The suite does not switch engines** (see below), and nothing yet finds an
+    element by image or restores cookies (the latter by design).
 
 ## Order for the next pass
 
-9 (visual) → 10 (snapshot). Both need a design decision: where a baseline and
-a saved session live, and what "the same" means for a screenshot.
+- Make the browser suite drive the Go engine, so the end-to-end evidence covers
+  what this machine actually runs (item 11).
+- Element finding by image, once visual assertions have a baseline story.
 
 11. **The suite does not switch engines.** `BROWSER_MCP_DAEMON=go` should make
     the server start `bin/browsermcpd`; the browser suite still reported the
