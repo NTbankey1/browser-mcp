@@ -7,6 +7,7 @@ import {
   type ExtensionRequest,
   type ExtensionState,
   LEGACY_PORT,
+  PRODUCT_NAME,
   RELAY_PORTS,
   RELAY_PROTOCOL_VERSION,
   createBrowserId,
@@ -54,8 +55,7 @@ import {
 } from "./tab-groups";
 
 /** What every command answers while the user has pressed **Stop** */
-export const PAUSED_MESSAGE =
-  "The user paused Browser MCP. Ask them to click Resume in its popup";
+export const PAUSED_MESSAGE = `The user paused ${PRODUCT_NAME}. Ask them to click Resume in its popup`;
 
 export const WATCHDOG_ALARM = "browser-control-watchdog";
 
@@ -696,7 +696,7 @@ export class BrowserControl {
   async allow(publicKey: string): Promise<void> {
     const daemon = this.#daemon;
     if (!daemon || daemon.publicKey !== publicKey) {
-      throw new Error("This Browser MCP server is no longer connected");
+      throw new Error(`This ${PRODUCT_NAME} server is no longer connected`);
     }
     await addPairedKey(publicKey);
     daemon.paired = true;

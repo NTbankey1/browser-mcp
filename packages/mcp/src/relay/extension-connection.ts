@@ -276,7 +276,7 @@ export class ExtensionConnection {
     this.closed = true;
     clearInterval(this.pingTimer);
     const error = new Error(
-      "The browser disconnected from Browser MCP while handling the command",
+      "The browser disconnected from ${PRODUCT_NAME} while handling the command",
     );
     const pending = [...this.pending.values()];
     this.pending.clear();

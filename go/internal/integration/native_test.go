@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -67,6 +68,38 @@ type fakeExtension struct {
 	url       string
 	paired    bool
 	frames    chan json.RawMessage
+	// The page the tests describe: what `wait` and its timeouts read back.
+	pageMu     sync.Mutex
+	bodyText   string
+	htmlText   string
+	readyState string
+}
+
+// setPage describes the page the fake extension serves.
+func (f *fakeExtension) setPage(bodyText, htmlText, readyState string) {
+	f.pageMu.Lock()
+	defer f.pageMu.Unlock()
+	f.bodyText, f.htmlText, f.readyState = bodyText, htmlText, readyState
+}
+
+// probeReply answers the engine's wait probe (`textProbe` and `pageState`)
+// from the page the test describes.
+func (f *fakeExtension) probeReply(expression string) any {
+	needle := ""
+	if match := regexp.MustCompile(`const needle = ("(?:[^"\\]|\\.)*")`).FindStringSubmatch(expression); match != nil {
+		_ = json.Unmarshal([]byte(match[1]), &needle)
+	}
+	f.pageMu.Lock()
+	text, html, readyState := f.bodyText, f.htmlText, f.readyState
+	f.pageMu.Unlock()
+	return valueReply(map[string]any{
+		"found":      strings.Contains(text, needle),
+		"caseFold":   strings.Contains(strings.ToLower(text), strings.ToLower(needle)),
+		"inHtml":     strings.Contains(html, needle),
+		"readyState": readyState,
+		"url":        f.url,
+		"sample":     strings.Join(strings.Fields(text), " "),
+	})
 }
 
 func connectExtension(t *testing.T, port int, pair bool) *fakeExtension {
@@ -80,7 +113,8 @@ func connectExtension(t *testing.T, port int, pair bool) *fakeExtension {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = ws.Close(websocket.StatusNormalClosure, "") })
-	fake := &fakeExtension{t: t, ws: ws, url: "about:blank", frames: make(chan json.RawMessage, 16)}
+	fake := &fakeExtension{t: t, ws: ws, url: "about:blank", frames: make(chan json.RawMessage, 16),
+		bodyText: "Hello page", readyState: "complete"}
 
 	challenge := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	hello := map[string]any{
@@ -270,6 +304,8 @@ func (f *fakeExtension) cdp(tabID int, method string, params json.RawMessage) (a
 			return map[string]any{"result": map[string]any{"objectId": "active"}}, ""
 		}
 		switch {
+		case strings.Contains(expression, "sample:"):
+			return f.probeReply(expression), ""
 		case strings.Contains(expression, "location.href"):
 			return valueReply(f.url), ""
 		case strings.Contains(expression, "document.title"):
@@ -404,7 +440,14 @@ func (c *fakeClient) answer(frame map[string]any) {
 
 func (c *fakeClient) browser(t *testing.T, commands string) (string, bool) {
 	t.Helper()
-	response := c.call("tools/call", map[string]any{"name": "browser", "arguments": map[string]any{"commands": commands}})
+	return c.callTool(t, map[string]any{"commands": commands})
+}
+
+// callTool runs `tools/call` with any arguments, to test how a call the model
+// gets wrong is answered.
+func (c *fakeClient) callTool(t *testing.T, arguments map[string]any) (string, bool) {
+	t.Helper()
+	response := c.call("tools/call", map[string]any{"name": "browser", "arguments": arguments})
 	if response["error"] != nil {
 		t.Fatalf("tools/call: %v", response["error"])
 	}
@@ -585,4 +628,139 @@ func rawClient(t *testing.T, port int, token string) *fakeClient {
 	c := &fakeClient{t: t, ws: ws}
 	c.send(map[string]any{"type": "hello", "protocol": 1, "version": "test", "client": map[string]any{"name": "claude-code"}, "capabilities": []string{}, "pid": 1})
 	return c
+}
+
+// --- guidance, waits and tab cleanup ---
+
+// connectedClient is a daemon, a paired extension with one tab of the user's,
+// and a client, which most of these tests start from.
+func connectedClient(t *testing.T) (*fakeClient, *fakeExtension) {
+	t.Helper()
+	_, home, port := startNative(t)
+	extension := connectExtension(t, port, true)
+	extension.sendState([]map[string]any{{
+		"tabId": 1, "windowId": 1, "url": "about:blank", "title": "New Tab",
+		"active": true, "pinned": false, "attached": false,
+	}}, "paired")
+	time.Sleep(100 * time.Millisecond)
+	info, err := config.ReadInfo(config.InfoPath(home, port))
+	if err != nil || info == nil {
+		t.Fatalf("daemon.json: %v %v", info, err)
+	}
+	return connectClient(t, port, info.Token), extension
+}
+
+func TestNativeCommandGuidance(t *testing.T) {
+	client, _ := connectedClient(t)
+
+	// The argument is named when the call sends it under another key
+	text, isError := client.callTool(t, map[string]any{"command": "help"})
+	if !isError || !strings.Contains(text, "`command`") || !strings.Contains(text, "Did you mean `commands`?") {
+		t.Fatalf("a wrong argument key: %q isError=%v", text, isError)
+	}
+
+	// An array of lines works as one string does
+	text, isError = client.callTool(t, map[string]any{"commands": []any{"tab list"}})
+	if isError || !strings.Contains(text, "New Tab") {
+		t.Fatalf("an array of lines: %q isError=%v", text, isError)
+	}
+
+	// A bare word of a multi-word command points at both forms
+	text, isError = client.browser(t, "list")
+	if !isError || !strings.Contains(text, "Unknown command list") ||
+		!strings.Contains(text, "`tab list`") || !strings.Contains(text, "`browser list`") {
+		t.Fatalf("a bare word: %q isError=%v", text, isError)
+	}
+
+	// A typo is matched to the command it meant
+	text, isError = client.browser(t, "clik e1")
+	if !isError || !strings.Contains(text, "Did you mean `click`?") {
+		t.Fatalf("a typo: %q isError=%v", text, isError)
+	}
+
+	// Nothing close: the way to see every command
+	text, isError = client.browser(t, "frobnicate")
+	if !isError || !strings.Contains(text, "Unknown command frobnicate") || !strings.Contains(text, "Run `help`") {
+		t.Fatalf("an unknown command: %q isError=%v", text, isError)
+	}
+}
+
+func TestNativeWaitTimeoutNamesThePageState(t *testing.T) {
+	client, extension := connectedClient(t)
+	extension.setPage("Where should we begin?", "", "complete")
+	if text, isError := client.browser(t, "goto https://chatgpt.com"); isError {
+		t.Fatalf("goto: %q", text)
+	}
+
+	// The text is nowhere: the message says what the page does show
+	text, isError := client.browser(t, `wait --text "Message ChatGPT" --timeout 300`)
+	if !isError || !strings.Contains(text, `didn't appear within`) {
+		t.Fatalf("a wait for text: %q isError=%v", text, isError)
+	}
+	if !strings.Contains(text, `the page shows "Where should we begin?"`) {
+		t.Fatalf("the timeout does not say what the page shows: %q", text)
+	}
+	if strings.Contains(text, "navigated") {
+		t.Fatalf("the timeout reports a navigation that did not happen: %q", text)
+	}
+
+	// A placeholder is not visible text: the message says where the text is
+	extension.setPage("Where should we begin?", `<textarea placeholder="Message ChatGPT"></textarea>`, "complete")
+	text, isError = client.browser(t, `wait --text "Message ChatGPT" --timeout 300`)
+	if !isError || !strings.Contains(text, "in the page's HTML but not in its visible text") {
+		t.Fatalf("a placeholder: %q isError=%v", text, isError)
+	}
+
+	// A page that has not finished loading says so
+	extension.setPage("", "", "loading")
+	text, isError = client.browser(t, `wait --text "Message ChatGPT" --timeout 300`)
+	if !isError || !strings.Contains(text, "still loading (readyState loading)") {
+		t.Fatalf("a loading page: %q isError=%v", text, isError)
+	}
+
+	// The text on the page ends the wait with no error
+	extension.setPage("Message ChatGPT", "", "complete")
+	if text, isError := client.browser(t, `wait --text "Message ChatGPT" --timeout 300`); isError || !strings.Contains(text, "✓ wait") {
+		t.Fatalf("a text that appears: %q isError=%v", text, isError)
+	}
+}
+
+func TestNativeTabsSurviveAFailedCallAndStayTheUser(t *testing.T) {
+	client, _ := connectedClient(t)
+
+	// The second step fails after goto opened a tab: the call stops, the tab stays
+	text, isError := client.browser(t, "goto https://example.com\nwait --text \"never there\" --timeout 200")
+	if !isError || !strings.Contains(text, "✗ step 2") {
+		t.Fatalf("a failed call: %q isError=%v", text, isError)
+	}
+	if strings.Contains(text, "✓ wait") {
+		t.Fatalf("a failed call ran its later step: %q", text)
+	}
+
+	// Cleanup: the tab the call opened is still the agent's to close
+	if text, isError := client.browser(t, "tab close 2"); isError || !strings.Contains(text, "✓ tab close 2") {
+		t.Fatalf("closing the opened tab after a failure: %q isError=%v", text, isError)
+	}
+
+	// The user's own tab is never closed
+	if text, isError := client.browser(t, "tab select 1"); isError {
+		t.Fatalf("tab select 1: %q", text)
+	}
+	text, isError = client.browser(t, "tab close 1")
+	if !isError || !strings.Contains(text, "isn't one you opened") {
+		t.Fatalf("closing the user's tab: %q isError=%v", text, isError)
+	}
+}
+
+func TestNativeNoBrowserConnected(t *testing.T) {
+	_, home, port := startNative(t)
+	info, err := config.ReadInfo(config.InfoPath(home, port))
+	if err != nil || info == nil {
+		t.Fatalf("daemon.json: %v %v", info, err)
+	}
+	client := connectClient(t, port, info.Token)
+	text, isError := client.browser(t, "tab list")
+	if !isError || !strings.Contains(text, "No browser is connected") {
+		t.Fatalf("no extension: %q isError=%v", text, isError)
+	}
 }

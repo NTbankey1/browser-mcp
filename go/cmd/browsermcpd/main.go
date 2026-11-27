@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/config"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/daemon"
 )
@@ -57,7 +58,7 @@ func main() {
 	}
 	instance, err := daemon.Start(cfg)
 	if errors.Is(err, daemon.ErrAlreadyRunning) {
-		fmt.Fprintln(os.Stderr, "Another Browser MCP daemon is already listening")
+		fmt.Fprintln(os.Stderr, "Another "+brand.Name+" daemon is already listening")
 		return
 	}
 	if err != nil {

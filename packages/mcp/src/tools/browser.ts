@@ -10,7 +10,7 @@ const EVERYDAY = [
   "goto <url> | back | forward | reload",
   "click <target>",
   'fill <target> "<text>" [--submit]',
-  'type "<text>"   # key by key, into the focused field (autocomplete)',
+  'type "<text>"   # key by key, into the focused field',
   "press <key>",
   'select <target> "<value>"',
   "check <target> | uncheck <target>",
@@ -20,7 +20,7 @@ const EVERYDAY = [
   'find "<text>"',
   "get text|value|count|url|title [<target>]",
   "screenshot [<target>]",
-  'eval "<js function>"   # runs in the page',
+  'eval "<js function>"   # in the page',
 ];
 
 /** Named only; `help <command>` prints their syntax */
@@ -48,11 +48,11 @@ export function browserDescription(
     ...capabilities.map((capability) => CAPABILITY_COMMANDS[capability]),
   ];
   return [
-    "Controls the user's browser. Use it when the task needs the real browser: a signed-in site, a page that needs its JavaScript, or a UI to click or type in; for a static public page, use the app's web fetch instead. Runs one command per line, stopping at the first error. Actions print one ✓ line, reads print their output. Do many steps per call.",
+    "Controls the user's browser: a signed-in site, a page that needs its JavaScript, or a UI to click or type in; for a static page, the app's web fetch is cheaper. One command per line, stopping at the first error. Actions print one ✓ line, reads their output. Do many steps per call.",
     ...EVERYDAY,
     `More (help <command>): ${more.join(", ")}`,
-    "Targets: e12 (a snapshot ref), getByRole('button', { name: 'Go' }), getByLabel/getByText/getByPlaceholder('…'), or CSS.",
-    'Quote text with spaces: "like this".',
+    "Targets: e12, getByRole('button', { name: 'Go' }), getByLabel/getByText/getByPlaceholder('…'), or CSS.",
+    "Quote text with spaces.",
   ].join("\n");
 }
 

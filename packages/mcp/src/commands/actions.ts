@@ -5,6 +5,8 @@
  */
 import type { ElementHandle, Locator, Page, Request } from "playwright-core";
 
+import { PRODUCT_NAME } from "@browsermcp/protocol";
+
 import { hiddenTabs } from "@/commands/hidden-tabs";
 import { isPageClosedError, sleep, StepError } from "@/commands/output";
 import { type Target, toLocator } from "@/commands/targets";
@@ -276,7 +278,7 @@ export async function moveCursor(page: Page, x: number, y: number) {
               .label { position:absolute; left:22px; top:26px; padding:3px 9px; border-radius:999px; background:#2563eb; color:#fff; font:600 12px/16px system-ui,-apple-system,sans-serif; white-space:nowrap; border:1.5px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.35); }
             </style>
             <svg class="arrow" width="30" height="36" viewBox="0 0 20 24"><path d="M1 1 L1 19 L6 14.5 L9.5 22 L12.5 20.7 L9 13.3 L15.5 13 Z" fill="#2563eb" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
-            <div class="label">Browser MCP</div>`;
+            <div class="label">${PRODUCT_NAME}</div>`;
           document.documentElement.appendChild(host);
         }
         host.style.transform = `translate(${x}px, ${y}px)`;

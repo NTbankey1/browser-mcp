@@ -8,14 +8,16 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Dialog } from "playwright-core";
 
+import { PRODUCT_NAME } from "@browsermcp/protocol";
+
 import { waitForLoad } from "@/commands/actions";
 import { cleanupCdp, newCdpState } from "@/commands/cdp";
 import {
-  availableCommands,
   type CommandDef,
   COMMANDS_BY_NAME,
   type StepContext,
   TIMEOUT_MAX_MS,
+  unknownCommandHint,
 } from "@/commands/commands";
 import { hiddenTabs } from "@/commands/hidden-tabs";
 import { INSTRUCTIONS } from "@/commands/instructions";
@@ -52,8 +54,7 @@ import { browserTool } from "@/tools/browser";
 
 const DEFAULT_IDLE_RELEASE_MS = 10 * 60_000;
 
-export const PAUSED_MESSAGE =
-  "The user paused Browser MCP. Ask them to click Resume in its popup";
+export const PAUSED_MESSAGE = `The user paused ${PRODUCT_NAME}. Ask them to click Resume in its popup`;
 const NO_TAB_MESSAGE =
   "There's no tab yet: use `goto <url>`, or `tab list` and `tab select <id>` to use one of the user's tabs";
 
@@ -188,15 +189,8 @@ class Engine implements CommandEngine {
     const session = this.sessions.get(sessionId);
     if (!session) return errorResult(`Unknown session ${sessionId}`);
     if (name !== "browser") return errorResult(`Unknown tool ${name}`);
-    const input = args?.commands;
-    if (
-      typeof input !== "string" &&
-      !(Array.isArray(input) && input.every((line) => typeof line === "string"))
-    ) {
-      return errorResult(
-        'commands is a string of command lines, e.g. "goto https://example.com\\nsnapshot -i"',
-      );
-    }
+    const input = commandsArgument(args);
+    if (typeof input !== "string") return errorResult(input.failure);
     const parsed = parseCommands(input);
     if (!parsed.length) return errorResult("No commands. Run `help`");
     // A typo on a later line would otherwise surface only after the earlier steps clicked and typed, leaving the page half-changed
@@ -960,9 +954,7 @@ function checkLine(
   try {
     if (!def) {
       throw new StepError(
-        `Unknown command ${name}. Commands: ${availableCommands(capabilities)
-          .map((c) => c.name)
-          .join(", ")}`,
+        `Unknown command ${name}. ${unknownCommandHint(name)}`,
       );
     }
     if (def.capability && !capabilities.includes(def.capability)) {
@@ -1016,6 +1008,67 @@ function dialogLabel(dialog: Dialog) {
 
 function truncate(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** The tool call's `commands`, or why the call got something else: a model that sends `command`, or an array of lines, is told what to send */
+function commandsArgument(
+  args: Record<string, unknown> | undefined,
+): string | { failure: string } {
+  const shape =
+    '`commands` is a string of command lines, one per line, e.g. "goto https://example.com\\nsnapshot -i"';
+  const value = args?.commands;
+  if (value !== undefined) {
+    if (typeof value === "string") return value;
+    if (
+      Array.isArray(value) &&
+      value.every((line) => typeof line === "string")
+    ) {
+      return value.join("\n");
+    }
+    if (value === null) {
+      return {
+        failure: `\`commands\` is null; ${shape}. Run \`help\` to list the commands`,
+      };
+    }
+    if (Array.isArray(value)) {
+      return {
+        failure: `\`commands\` is an array with something that isn't a line of text in it; ${shape}`,
+      };
+    }
+    return { failure: `\`commands\` is ${jsonTypeName(value)}; ${shape}` };
+  }
+  const keys = Object.keys(args ?? {}).sort();
+  if (!keys.length) {
+    return {
+      failure: `No arguments. ${shape}. Run \`help\` to list the commands`,
+    };
+  }
+  const near = keys.some((key) =>
+    [
+      "command",
+      "cmd",
+      "cmds",
+      "commandlines",
+      "lines",
+      "line",
+      "input",
+      "script",
+      "code",
+    ].includes(key.toLowerCase()),
+  );
+  const quoted = keys.map((key) => `\`${key}\``).join(", ");
+  return {
+    failure: near
+      ? `The tool takes one argument, ${quoted}; ${shape}. Did you mean \`commands\`?`
+      : `The tool takes one argument, ${quoted}; ${shape}. Run \`help\` to list the commands`,
+  };
+}
+
+function jsonTypeName(value: unknown): string {
+  if (typeof value === "boolean") return "a boolean";
+  if (typeof value === "number") return "a number";
+  if (typeof value === "object") return "an object";
+  return "not a string";
 }
 
 function errorResult(text: string): CallToolResult {

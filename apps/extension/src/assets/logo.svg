@@ -1,20 +1,20 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="14" y1="6" x2="114" y2="124" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4F46E5"/>
-      <stop offset="0.55" stop-color="#5B4BE0"/>
-      <stop offset="1" stop-color="#7C3AED"/>
+      <stop stop-color="#2B7FFF"/>
+      <stop offset="0.55" stop-color="#1D6FF2"/>
+      <stop offset="1" stop-color="#123D7A"/>
     </linearGradient>
     <linearGradient id="sheen" x1="20" y1="12" x2="108" y2="116" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" stop-opacity="0.20"/>
       <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="cursor" x1="60" y1="52" x2="76" y2="92" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FBBF24"/>
-      <stop offset="1" stop-color="#F59E0B"/>
+    <linearGradient id="bar" x1="52" y1="46" x2="92" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#16A34A"/>
     </linearGradient>
     <filter id="shadow" x="16" y="26" width="96" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#1E1B4B" flood-opacity="0.32"/>
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#0B1F3A" flood-opacity="0.32"/>
     </filter>
   </defs>
 
@@ -22,15 +22,17 @@
   <rect width="128" height="128" rx="30" fill="url(#bg)"/>
   <rect width="128" height="128" rx="30" fill="url(#sheen)"/>
 
-  <!-- browser window -->
+  <!-- browser window: the source of the data -->
   <g filter="url(#shadow)">
     <rect x="24" y="32" width="80" height="64" rx="15" fill="#FFFFFF"/>
   </g>
-  <path d="M24 49H104" stroke="#E0E7FF" stroke-width="2"/>
-  <circle cx="37" cy="40.5" r="3.2" fill="#818CF8"/>
-  <circle cx="48" cy="40.5" r="3.2" fill="#A5B4FC"/>
-  <circle cx="59" cy="40.5" r="3.2" fill="#C7D2FE"/>
+  <path d="M24 49H104" stroke="#DBEAFE" stroke-width="2"/>
+  <circle cx="37" cy="40.5" r="3.2" fill="#93C5FD"/>
+  <circle cx="48" cy="40.5" r="3.2" fill="#BFDBFE"/>
+  <circle cx="59" cy="40.5" r="3.2" fill="#E0E7FF"/>
 
-  <!-- pointer: the agent driving the page -->
-  <path d="M54 54L54 86L62.5 78L68.5 91.5L76 88L70 75L82 75L54 54Z" fill="url(#cursor)"/>
+  <!-- rising bars: the report it produces -->
+  <rect x="38" y="72" width="10" height="14" rx="2.5" fill="#BFDBFE"/>
+  <rect x="54" y="62" width="10" height="24" rx="2.5" fill="#60A5FA"/>
+  <rect x="70" y="54" width="10" height="32" rx="2.5" fill="url(#bar)"/>
 </svg>

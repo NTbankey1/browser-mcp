@@ -5,10 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/cdp"
 )
 
@@ -271,7 +275,7 @@ func moveCursor(ctx context.Context, tab *cdp.Tab, x, y float64) {
     host.id=id; host.setAttribute('aria-hidden','true');
     host.style.cssText='position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;transition:transform 300ms ease-out;';
     host.style.transform='translate('+x+'px, '+y+'px)';
-    host.attachShadow({mode:'closed'}).innerHTML='<style>.arrow{position:absolute;left:-3px;top:-3px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45)) drop-shadow(0 0 6px rgba(37,99,235,.9));}.label{position:absolute;left:22px;top:26px;padding:3px 9px;border-radius:999px;background:#2563eb;color:#fff;font:600 12px/16px system-ui,-apple-system,sans-serif;white-space:nowrap;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);}</style><svg class="arrow" width="30" height="36" viewBox="0 0 20 24"><path d="M1 1 L1 19 L6 14.5 L9.5 22 L12.5 20.7 L9 13.3 L15.5 13 Z" fill="#2563eb" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><div class="label">Browser MCP</div>';
+    host.attachShadow({mode:'closed'}).innerHTML='<style>.arrow{position:absolute;left:-3px;top:-3px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45)) drop-shadow(0 0 6px rgba(37,99,235,.9));}.label{position:absolute;left:22px;top:26px;padding:3px 9px;border-radius:999px;background:#2563eb;color:#fff;font:600 12px/16px system-ui,-apple-system,sans-serif;white-space:nowrap;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);}</style><svg class="arrow" width="30" height="36" viewBox="0 0 20 24"><path d="M1 1 L1 19 L6 14.5 L9.5 22 L12.5 20.7 L9 13.3 L15.5 13 Z" fill="#2563eb" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><div class="label">`+brand.Name+`</div>';
     document.documentElement.appendChild(host);
   }
   host.style.transform='translate('+x+'px, '+y+'px)';
@@ -898,9 +902,31 @@ const fetchScript = `async function(url, maxBytes){
   return { base64: btoa(binary), name, url: response.url, size: bytes.length, type: response.headers.get('content-type') || '' };
 }`
 
-// fetchFile fetches a URL inside the page, so it uses the page's cookies and
-// CORS rules.
+// fetchFile fetches a URL for the page. It first tries the page itself (which
+// handles relative URLs and the page's own already-warm requests); when that
+// fails, as it does for another origin, where the page's fetch is refused by
+// CORS, it asks the browser to load the URL instead, so the download uses the
+// browser's cookies and is not subject to the page's cross-origin rules.
 func fetchFile(ctx context.Context, tab *cdp.Tab, url string) (fetchedFile, error) {
+	file, err := fetchFileInPage(ctx, tab, url)
+	if err == nil {
+		return file, nil
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return fetchedFile{}, err
+	}
+	anonymous, anonymousErr := fetchFileOverHTTP(ctx, url)
+	if anonymousErr == nil {
+		return anonymous, nil
+	}
+	// The plain request's error is the more specific of the two (an HTTP status
+	// or a network error), so it is the one worth showing.
+	return fetchedFile{}, anonymousErr
+}
+
+// fetchFileInPage fetches a URL inside the page, so it uses the page's cookies
+// and CORS rules.
+func fetchFileInPage(ctx context.Context, tab *cdp.Tab, url string) (fetchedFile, error) {
 	result, err := tab.Send(ctx, "Runtime.evaluate", map[string]any{
 		"expression":    fmt.Sprintf("(%s)(%s, %d)", strings.TrimSuffix(fetchScript, ""), strconv.Quote(url), DownloadMaxBytes),
 		"returnByValue": true,
@@ -927,6 +953,77 @@ func fetchFile(ctx context.Context, tab *cdp.Tab, url string) (fetchedFile, erro
 		return fetchedFile{}, stepErrorf("%s", firstLineOf(reply.ExceptionDetails.Exception.Description))
 	}
 	return reply.Result.Value, nil
+}
+
+// fetchFileOverHTTP fetches a URL with a plain request from the daemon. It sends
+// none of the browser's cookies, which is the point: the extension refuses CDP
+// commands that would read other sites with the user's cookies, so a public file
+// is fetched anonymously, and a file behind a login has to be reached the way the
+// user reaches it (open it in a tab, or download it from its own origin).
+func fetchFileOverHTTP(ctx context.Context, url string) (fetchedFile, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return fetchedFile{}, stepErrorf("%s", err)
+	}
+	request.Header.Set("User-Agent", brand.Name)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return fetchedFile{}, stepErrorf("%s", firstLineOf(err.Error()))
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= 400 {
+		return fetchedFile{}, stepErrorf("HTTP %d for %s", response.StatusCode, url)
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, DownloadMaxBytes+1))
+	if err != nil {
+		return fetchedFile{}, stepErrorf("%s", firstLineOf(err.Error()))
+	}
+	if len(data) > DownloadMaxBytes {
+		return fetchedFile{}, stepErrorf("the file is larger than %d bytes", DownloadMaxBytes)
+	}
+	name := dispositionName(response.Header.Get("Content-Disposition"))
+	if name == "" {
+		if parsed, err := neturl.Parse(response.Request.URL.String()); err == nil {
+			segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+			if len(segments) > 0 && segments[len(segments)-1] != "" {
+				name = segments[len(segments)-1]
+			}
+		}
+	}
+	if name == "" {
+		name = "download"
+	}
+	return fetchedFile{
+		Base64: base64.StdEncoding.EncodeToString(data),
+		Name:   name,
+		URL:    response.Request.URL.String(),
+		Size:   len(data),
+		Type:   response.Header.Get("Content-Type"),
+	}, nil
+}
+
+// dispositionName reads the file name out of a Content-Disposition header.
+func dispositionName(header string) string {
+	if header == "" {
+		return ""
+	}
+	lower := strings.ToLower(header)
+	index := strings.Index(lower, "filename=")
+	if index < 0 {
+		return ""
+	}
+	value := strings.TrimSpace(header[index+len("filename="):])
+	value = strings.TrimPrefix(value, "UTF-8''")
+	if semicolon := strings.Index(value, ";"); semicolon >= 0 {
+		value = value[:semicolon]
+	}
+	value = strings.Trim(strings.TrimSpace(value), "\"")
+	if decoded, err := neturl.PathUnescape(value); err == nil {
+		return decoded
+	}
+	return value
 }
 
 // elementRect returns an element's page coordinates.

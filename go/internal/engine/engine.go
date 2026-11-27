@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -270,9 +271,9 @@ func (e *Engine) CallTool(ctx context.Context, sessionID, name string, args map[
 	if name != "browser" {
 		return errorResult("Unknown tool " + name), nil
 	}
-	input, ok := args["commands"].(string)
-	if !ok {
-		return errorResult(`commands is a string of command lines, e.g. "goto https://example.com\nsnapshot -i"`), nil
+	input, failure := commandsArgument(args)
+	if failure != "" {
+		return errorResult(failure), nil
 	}
 	parsed := ParseCommands(input)
 	if len(parsed) == 0 {
@@ -934,8 +935,8 @@ func checkLine(line CommandLine, capabilities []string) (checkedLine, error) {
 		echo = Truncate(line.Source, EchoMax)
 	}
 	if def == nil {
-		return checkedLine{}, fmt.Errorf("✗ step %d: %s — Unknown command %s. Commands: %s",
-			line.Step, echo, name, strings.Join(availableCommandNames(capabilities), ", "))
+		return checkedLine{}, fmt.Errorf("✗ step %d: %s — Unknown command %s. %s",
+			line.Step, echo, name, unknownCommandHint(name))
 	}
 	if def.Capability != "" && !contains(capabilities, def.Capability) {
 		return checkedLine{}, fmt.Errorf("✗ step %d: %s — `%s` is off. Start @browsermcp/mcp with `--caps %s` to turn it on",
@@ -982,6 +983,191 @@ func availableCommandNames(capabilities []string) []string {
 		}
 	}
 	return names
+}
+
+// --- Call arguments and mistyped commands ---
+
+// commandsShape says what the tool's one argument is, for a call that sent
+// something else.
+const commandsShape = "`commands` is a string of command lines, one per line, e.g. \"goto https://example.com\\nsnapshot -i\""
+
+// commandsArgument reads the tool call's `commands`, naming the argument when
+// the call sends it under another key or as another type: a model that sends
+// `command` or an array of lines gets told what to send, not what a schema is.
+func commandsArgument(args map[string]any) (string, string) {
+	if value, present := args["commands"]; present {
+		switch typed := value.(type) {
+		case string:
+			return typed, ""
+		case []any:
+			lines := make([]string, 0, len(typed))
+			for _, entry := range typed {
+				line, ok := entry.(string)
+				if !ok {
+					lines = nil
+					break
+				}
+				lines = append(lines, line)
+			}
+			if lines != nil {
+				return strings.Join(lines, "\n"), ""
+			}
+			return "", "`commands` is an array with something that isn't a line of text in it; " + commandsShape
+		case []string:
+			return strings.Join(typed, "\n"), ""
+		case nil:
+			return "", "`commands` is null; " + commandsShape + ". Run `help` to list the commands"
+		default:
+			return "", "`commands` is " + jsonTypeName(value) + "; " + commandsShape
+		}
+	}
+	keys := make([]string, 0, len(args))
+	for key := range args {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if len(keys) == 0 {
+		return "", "No arguments. " + commandsShape + ". Run `help` to list the commands"
+	}
+	quoted := make([]string, len(keys))
+	near := false
+	for i, key := range keys {
+		quoted[i] = "`" + key + "`"
+		switch strings.ToLower(key) {
+		case "command", "cmd", "cmds", "commandlines", "lines", "line", "input", "script", "code":
+			near = true
+		}
+	}
+	message := "The tool takes one argument, " + strings.Join(quoted, ", ") + "; " + commandsShape
+	if near {
+		message += ". Did you mean `commands`?"
+	} else {
+		message += ". Run `help` to list the commands"
+	}
+	return "", message
+}
+
+func jsonTypeName(value any) string {
+	switch value.(type) {
+	case bool:
+		return "a boolean"
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		return "a number"
+	case map[string]any:
+		return "an object"
+	default:
+		return "not a string"
+	}
+}
+
+// unknownCommandHint names what a mistyped command most likely meant, then
+// points at `help` for everything else.
+func unknownCommandHint(name string) string {
+	suggestions := commandSuggestions(name)
+	if len(suggestions) == 0 {
+		return "Run `help` to list the commands"
+	}
+	return "Did you mean " + quotedList(suggestions) + "? Run `help` to list the commands"
+}
+
+func quotedList(values []string) string {
+	quoted := make([]string, len(values))
+	for i, value := range values {
+		quoted[i] = "`" + value + "`"
+	}
+	switch len(quoted) {
+	case 1:
+		return quoted[0]
+	case 2:
+		return quoted[0] + " or " + quoted[1]
+	default:
+		return strings.Join(quoted[:len(quoted)-1], ", ") + " or " + quoted[len(quoted)-1]
+	}
+}
+
+// commandSuggestions is what a mistyped command name could have meant: a word
+// of a multi-word command (`list` is `tab list` and `browser list`), a prefix
+// (`snap` is `snapshot`), or a name one or two edits away (`clik` is `click`).
+func commandSuggestions(name string) []string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return nil
+	}
+	var suggestions []string
+	seen := map[string]bool{}
+	add := func(candidate string) {
+		if candidate == "" || candidate == name || seen[candidate] {
+			return
+		}
+		seen[candidate] = true
+		suggestions = append(suggestions, candidate)
+	}
+	for _, def := range commands {
+		for _, alternative := range strings.Split(def.Usage, "|") {
+			alternative = strings.TrimSpace(strings.SplitN(alternative, "#", 2)[0])
+			words := strings.Fields(alternative)
+			for i, word := range words {
+				if i > 0 && strings.EqualFold(word, name) {
+					add(strings.Join(words[:i+1], " "))
+					break
+				}
+			}
+		}
+	}
+	if len(name) >= 3 {
+		for _, def := range commands {
+			if strings.HasPrefix(def.Name, name) {
+				add(def.Name)
+			}
+		}
+	}
+	// Names that share the first letter only: `nope` is two edits from `type`
+	// but means nothing, and a suggestion that wrong is worse than none.
+	best := 3
+	var nearest []string
+	for _, def := range commands {
+		if name[0] != def.Name[0] {
+			continue
+		}
+		switch distance := editDistance(name, def.Name); {
+		case distance < best:
+			best = distance
+			nearest = []string{def.Name}
+		case distance == best:
+			nearest = append(nearest, def.Name)
+		}
+	}
+	// Two edits are a typo in a long word (`clcik`), not in a short one
+	if best == 1 || (best == 2 && len(name) >= 5) {
+		for _, candidate := range nearest {
+			add(candidate)
+		}
+	}
+	if len(suggestions) > 3 {
+		suggestions = suggestions[:3]
+	}
+	return suggestions
+}
+
+// editDistance is the Levenshtein distance between two lowercase words.
+func editDistance(a, b string) int {
+	previous := make([]int, len(b)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		current := make([]int, len(b)+1)
+		current[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			current[j] = min(previous[j]+1, current[j-1]+1, previous[j-1]+cost)
+		}
+		previous = current
+	}
+	return previous[len(b)]
 }
 
 // --- Browser choice ---

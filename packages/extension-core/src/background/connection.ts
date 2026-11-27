@@ -11,6 +11,7 @@ import {
   RelayCloseCode,
   RelayPaths,
   type RelayStatus,
+  PRODUCT_NAME,
   RelayUpdateReason,
   createPairingNonce,
 } from "@browsermcp/protocol";
@@ -188,7 +189,7 @@ export class RelayConnection {
       await this.#options.setStatus(outcome);
       this.#scheduleRetry();
     } catch (error) {
-      console.error("Couldn't look for the Browser MCP server", error);
+      console.error(`Couldn't look for the ${PRODUCT_NAME} server`, error);
       this.#scheduleRetry();
     } finally {
       this.#cycling = false;
@@ -262,7 +263,7 @@ export class RelayConnection {
         this.#ready = this.#handleWelcome(ws, port, message, challenge).catch(
           (error: unknown) => {
             console.error(
-              "Couldn't handle the Browser MCP server's welcome",
+              `Couldn't handle the ${PRODUCT_NAME} server's welcome`,
               error,
             );
           },

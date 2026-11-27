@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/cdp"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/extproto"
 )
@@ -155,7 +156,7 @@ func init() {
 		{
 			Name:   "wait",
 			Usage:  `wait <ms> | wait --text "<text>" | wait --gone "<text>" | wait --url <glob> | wait <target>`,
-			Help:   "Waits a number of ms (up to 60000), or until text appears or disappears, the URL matches (a glob with * and **, or a substring), or the target is visible. Times out after 10 s; change it with --timeout <ms>.",
+			Help:   "Waits a number of ms (up to 60000), or until text appears or disappears, the URL matches (a glob with * and **, or a substring), or the target is visible. Times out after 10 s; change it with --timeout <ms>. --text matches the page's visible text: a placeholder or an attribute needs a target instead. A timeout reports the page's URL, ready state and visible text.",
 			Flags:  FlagSpec{"text": true, "gone": true, "url": true, "timeout": true},
 			NoPage: true, MaxArgs: 1, Run: runWait,
 		},
@@ -212,8 +213,8 @@ func init() {
 			Timeout: func(ParsedArgs) time.Duration { return 60 * time.Second }, Run: runPDF,
 		},
 		{
-			Name: "download", Usage: "download <url>|<target> [--path <file>]   # fetches a file as the page would",
-			Help:  fmt.Sprintf("Fetches a file in the page, as its own scripts would (its cookies; another site's file needs CORS), and saves it. Up to %d MB.", DownloadMaxBytes/1024/1024),
+			Name: "download", Usage: "download <url>|<target> [--path <file>]   # saves a file",
+			Help:  fmt.Sprintf("Saves a file: first as the page would fetch it (its cookies, same origin), then, for a URL on another site, with a plain request from this program that carries no cookies, so public files download from any site and a file behind a login does not. Up to %d MB.", DownloadMaxBytes/1024/1024),
 			Flags: FlagSpec{"path": true}, MaxArgs: 1,
 			Timeout: func(ParsedArgs) time.Duration { return 60 * time.Second }, Run: runDownload,
 		},
@@ -576,9 +577,13 @@ func runUpload(ctx context.Context, c *stepContext) error {
 	}
 	files := make([]string, 0, len(c.args.Positional)-1)
 	var temps []string
+	// The page reads an uploaded file when its form is submitted (or when its
+	// upload handler fires), not when the input is set, so the staged copies
+	// must outlive this step. Delete them later instead of right away.
 	defer func() {
 		for _, temp := range temps {
-			os.RemoveAll(temp)
+			dir := temp
+			time.AfterFunc(10*time.Minute, func() { os.RemoveAll(dir) })
 		}
 	}()
 	for _, token := range c.args.Positional[1:] {
@@ -632,38 +637,62 @@ func runWait(ctx context.Context, c *stepContext) error {
 		}
 	}
 	deadline := time.Now().Add(timeout)
+	startURL, _ := c.engine.quickURL(ctx, c.engine.currentTab(c.session))
 	if text, ok := c.args.Value("text"); ok {
+		var last textProbe
 		return poll(ctx, deadline, func() bool {
-			var found bool
-			state := c.engine.stateForID(c.engine.currentTab(c.session))
-			if state == nil {
-				return false
+			probe, ok := probeText(ctx, c.engine.tabOf(c.session), text)
+			if ok {
+				last = probe
 			}
-			err := state.Tab.Eval(ctx, fmt.Sprintf("(document.body ? document.body.innerText : '').includes(%s)", strconv.Quote(text)), &found)
-			return err == nil && found
-		}, fmt.Sprintf("The text %q didn't appear within %s", text, roundSeconds(timeout)))
+			return ok && probe.Found
+		}, func() string {
+			// The same two failures look alike: a text that isn't there, and a
+			// text that is (in another case, or in an attribute such as a
+			// placeholder). Say which one the page is.
+			var hints []string
+			if last.CaseFold && !last.Found {
+				hints = append(hints, "it is on the page, in a different case")
+			}
+			if last.InHTML && !last.Found {
+				hints = append(hints, "it is in the page's HTML but not in its visible text: a placeholder, an attribute, or hidden")
+			}
+			return waitFailure(
+				fmt.Sprintf("The text %q didn't appear within %s", text, roundSeconds(timeout)),
+				last.pageState(), startURL, hints,
+			)
+		})
 	}
 	if text, ok := c.args.Value("gone"); ok {
+		var last textProbe
 		return poll(ctx, deadline, func() bool {
-			var present bool
-			state := c.engine.stateForID(c.engine.currentTab(c.session))
-			if state == nil {
-				return false
+			probe, ok := probeText(ctx, c.engine.tabOf(c.session), text)
+			if ok {
+				last = probe
 			}
-			err := state.Tab.Eval(ctx, fmt.Sprintf("(document.body ? document.body.innerText : '').includes(%s)", strconv.Quote(text)), &present)
-			return err == nil && !present
-		}, fmt.Sprintf("The text %q is still on the page after %s", text, roundSeconds(timeout)))
+			return ok && !probe.Found
+		}, func() string {
+			return waitFailure(
+				fmt.Sprintf("The text %q is still on the page after %s", text, roundSeconds(timeout)),
+				last.pageState(), startURL, nil,
+			)
+		})
 	}
 	if pattern, ok := c.args.Value("url"); ok {
 		matches := urlMatcher(pattern)
+		var last pageState
 		return poll(ctx, deadline, func() bool {
-			state := c.engine.stateForID(c.engine.currentTab(c.session))
-			if state == nil {
-				return false
+			state, ok := readPageState(ctx, c.engine.tabOf(c.session))
+			if ok {
+				last = state
 			}
-			var href string
-			return state.Tab.Eval(ctx, "location.href", &href) == nil && matches(href)
-		}, fmt.Sprintf("The URL did not match %q within %s", pattern, roundSeconds(timeout)))
+			return ok && matches(state.URL)
+		}, func() string {
+			return waitFailure(
+				fmt.Sprintf("The URL did not match %q within %s", pattern, roundSeconds(timeout)),
+				last, startURL, nil,
+			)
+		})
 	}
 	first, err := positional(c.args, 0, "<ms|target>")
 	if err != nil {
@@ -694,16 +723,22 @@ func runWait(ctx context.Context, c *stepContext) error {
 	return poll(ctx, deadline, func() bool {
 		_, err := res.One(ctx, target, 100*time.Millisecond)
 		return err == nil
-	}, fmt.Sprintf("Nothing matches %s after %s", first, roundSeconds(timeout)))
+	}, func() string {
+		state, _ := readPageState(ctx, c.engine.tabOf(c.session))
+		return waitFailure(
+			fmt.Sprintf("Nothing matches %s after %s", first, roundSeconds(timeout)),
+			state, startURL, nil,
+		)
+	})
 }
 
-func poll(ctx context.Context, deadline time.Time, check func() bool, failure string) error {
+func poll(ctx context.Context, deadline time.Time, check func() bool, failure func() string) error {
 	for {
 		if check() {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return stepErrorf("%s", failure)
+			return stepErrorf("%s", failure())
 		}
 		select {
 		case <-time.After(100 * time.Millisecond):
@@ -711,6 +746,106 @@ func poll(ctx context.Context, deadline time.Time, check func() bool, failure st
 			return ctx.Err()
 		}
 	}
+}
+
+// pageState is what a timed-out wait needs to tell a slow page from a wrong
+// target: where the page is, whether it finished loading, and what it shows.
+type pageState struct {
+	ReadyState string `json:"readyState"`
+	URL        string `json:"url"`
+	Sample     string `json:"sample"`
+}
+
+// textProbe is one look at a page for `wait --text` or `wait --gone`:
+// whether the text is in its visible text, in another case, only in its HTML,
+// and the page state a timeout reports.
+type textProbe struct {
+	Found      bool   `json:"found"`
+	CaseFold   bool   `json:"caseFold"`
+	InHTML     bool   `json:"inHtml"`
+	ReadyState string `json:"readyState"`
+	URL        string `json:"url"`
+	Sample     string `json:"sample"`
+}
+
+func (p textProbe) pageState() pageState {
+	return pageState{ReadyState: p.ReadyState, URL: p.URL, Sample: p.Sample}
+}
+
+// tabOf is the current tab's state, or nil (no tab, or one the engine
+// detached from): the waits poll it without claiming the tab, so a timeout
+// still reports what the page shows.
+func (e *Engine) tabOf(session *Session) *TabState {
+	return e.stateForID(e.currentTab(session))
+}
+
+const textProbeExpression = `(() => {
+	const body = document.body;
+	const text = body ? body.innerText : "";
+	const html = document.documentElement ? document.documentElement.outerHTML : "";
+	const needle = %s;
+	return {
+		found: text.includes(needle),
+		caseFold: text.toLowerCase().includes(needle.toLowerCase()),
+		inHtml: html.includes(needle),
+		readyState: document.readyState,
+		url: location.href,
+		sample: text.replace(/\s+/g, " ").trim().slice(0, 160),
+	};
+})()`
+
+func probeText(ctx context.Context, state *TabState, text string) (textProbe, bool) {
+	if state == nil || state.Tab.Closed() {
+		return textProbe{}, false
+	}
+	var probe textProbe
+	if err := state.Tab.Eval(ctx, fmt.Sprintf(textProbeExpression, strconv.Quote(text)), &probe); err != nil {
+		return textProbe{}, false
+	}
+	return probe, true
+}
+
+const pageStateExpression = `(() => {
+	const body = document.body;
+	const text = body ? body.innerText : "";
+	return {
+		readyState: document.readyState,
+		url: location.href,
+		sample: text.replace(/\s+/g, " ").trim().slice(0, 160),
+	};
+})()`
+
+func readPageState(ctx context.Context, state *TabState) (pageState, bool) {
+	if state == nil || state.Tab.Closed() {
+		return pageState{}, false
+	}
+	var page pageState
+	if err := state.Tab.Eval(ctx, pageStateExpression, &page); err != nil {
+		return pageState{}, false
+	}
+	return page, true
+}
+
+// waitFailure is a wait's timeout message: the page's own state, so the model
+// can tell a wrong string from a slow load or a navigation, without a second
+// call to look.
+func waitFailure(base string, state pageState, startURL string, hints []string) string {
+	details := append([]string{}, hints...)
+	if state.URL != "" && startURL != "" && state.URL != startURL {
+		details = append(details, "the page navigated to "+shortURL(state.URL, startURL)+" meanwhile")
+	}
+	if state.ReadyState != "" && state.ReadyState != "complete" {
+		details = append(details, "the page was still loading (readyState "+state.ReadyState+")")
+	}
+	if state.Sample != "" {
+		details = append(details, "the page shows "+quote(Truncate(state.Sample, 160)))
+	} else if state.ReadyState == "complete" {
+		details = append(details, "the page has no visible text")
+	}
+	if len(details) == 0 {
+		return base
+	}
+	return base + "; " + strings.Join(details, "; ")
 }
 
 func runDialog(ctx context.Context, c *stepContext) error {
@@ -1620,7 +1755,7 @@ func runHelp(ctx context.Context, c *stepContext) error {
 	name := c.args.Positional[0].Text
 	def := commandsByName[name]
 	if def == nil {
-		return stepErrorf("Unknown command %s. Run `help`", name)
+		return stepErrorf("Unknown command %s. %s", name, unknownCommandHint(name))
 	}
 	c.Print(def.Usage + "\n\n" + def.Help + "\n\n" + TARGETS_HELP)
 	return nil
@@ -1630,27 +1765,29 @@ func runHelp(ctx context.Context, c *stepContext) error {
 
 const TARGETS_HELP = "Targets: a ref from snapshot (e12), a locator (getByRole('button', { name: 'Submit' }), getByLabel, getByText, getByPlaceholder, getByTestId, .first(), .nth(i), .filter({ hasText }), locator('css')), or a CSS selector (quote it if it has spaces)."
 
-const instructions = "Browser MCP controls the user's Chrome through the `browser` tool:\n" +
+const instructions = brand.Name + " controls the user's Chrome through the `browser` tool:\n" +
 	"1. Act in batches: put every step you can predict in one call (targets like getByLabel('Email') work without a snapshot).\n" +
 	"2. Look with `snapshot -i` or `find \"<text>\"`; read a whole page with `get text --max all`.\n" +
-	"3. Re-snapshot after navigating: refs from an older page fail."
+	"3. Re-snapshot after navigating: refs from an older page fail.\n" +
+	"4. Wait for what the page gives you (`wait --url`, a role target, `wait --timeout <ms>`), not a guessed string; if the page asks the user to sign in, stop and ask them.\n" +
+	"5. A call stops at its first error. Close the tab you opened, even after a failed step, with `tab close <id>` in a call of its own; it only closes tabs you opened."
 
 func browserTool(capabilities []string) Tool {
 	everyday := []string{
 		"goto <url> | back | forward | reload",
 		"click <target>",
 		`fill <target> "<text>" [--submit]`,
-		`type "<text>"   # key by key, into the focused field (autocomplete)`,
+		`type "<text>"   # key by key, into the focused field`,
 		"press <key>",
 		`select <target> "<value>"`,
 		"check <target> | uncheck <target>",
-		`wait <ms> | wait --text "<text>" | wait <target>`,
+		`wait <ms> | wait --text "<text>" | wait <target>   # --timeout <ms>, --url <glob>, --gone`,
 		"tab list | tab new [<url>] | tab select <id> | tab close",
 		"snapshot [<target>] [-i] [--depth N]",
 		`find "<text>"`,
 		"get text|value|count|url|title [<target>]",
 		"screenshot [<target>]",
-		`eval "<js function>"   # runs in the page`,
+		`eval "<js function>"   # in the page`,
 	}
 	more := []string{"scroll", "hover", "drag", "upload", "download", "pdf", "dialog", "console", "requests", "request"}
 	for _, capability := range capabilities {
@@ -1659,10 +1796,10 @@ func browserTool(capabilities []string) Tool {
 		}
 	}
 	description := strings.Join(append(append([]string{
-		"Controls the user's browser. Use it when the task needs the real browser: a signed-in site, a page that needs its JavaScript, or a UI to click or type in; for a static public page, use the app's web fetch instead. Runs one command per line, stopping at the first error. Actions print one ✓ line, reads print their output. Do many steps per call.",
+		"Controls the user's browser: a signed-in site, a page that needs its JavaScript, or a UI to click or type in; for a static page, the app's web fetch is cheaper. One command per line, stopping at the first error. Actions print one ✓ line, reads their output. Do many steps per call.",
 	}, everyday...), "More (help <command>): "+strings.Join(more, ", "),
-		"Targets: e12 (a snapshot ref), getByRole('button', { name: 'Go' }), getByLabel/getByText/getByPlaceholder('…'), or CSS.",
-		`Quote text with spaces: "like this".`,
+		"Targets: e12, getByRole('button', { name: 'Go' }), getByLabel/getByText/getByPlaceholder('…'), or CSS.",
+		`Quote text with spaces.`,
 	), "\n")
 	return Tool{
 		Name:        "browser",

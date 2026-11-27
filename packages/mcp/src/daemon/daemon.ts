@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import net from "node:net";
 import WebSocket from "ws";
 
-import { RELAY_PORTS, RelayPaths } from "@browsermcp/protocol";
+import { PRODUCT_NAME, RELAY_PORTS, RelayPaths } from "@browsermcp/protocol";
 
 import {
   CLIENT_PROTOCOL_VERSION,
@@ -68,7 +68,7 @@ export type DaemonOptions = {
 /** Another daemon already holds the port: this one exits and the thin processes use that one */
 export class DaemonAlreadyRunningError extends Error {
   constructor(readonly port: number) {
-    super(`A Browser MCP daemon is already running on port ${port}`);
+    super(`A ${PRODUCT_NAME} daemon is already running on port ${port}`);
   }
 }
 
