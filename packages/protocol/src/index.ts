@@ -42,8 +42,7 @@ export function isValidRelayPort(port: number): boolean {
 }
 
 /** What the extension answers every 0.1.x server command with, so the agent tells the user why the browser stopped working */
-export const LEGACY_SERVER_MESSAGE =
-  `${PRODUCT_NAME}'s extension is now 2.0. Update the MCP server: use @browsermcp/mcp@latest in your AI app's MCP config and restart the app`;
+export const LEGACY_SERVER_MESSAGE = `${PRODUCT_NAME}'s extension is now 2.0. Update the MCP server: use @browsermcp/mcp@latest in your AI app's MCP config and restart the app`;
 
 // --- Pairing ---
 
@@ -125,8 +124,7 @@ function fromBase64(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 /** What tool calls answer while no 2.0 extension is connected (none, or a 1.x one, which only dials 9009) */
-export const NO_EXTENSION_MESSAGE =
-  `No browser is connected. Install the ${PRODUCT_NAME} extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update`;
+export const NO_EXTENSION_MESSAGE = `No browser is connected. Install the ${PRODUCT_NAME} extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update`;
 
 /** How many browsers (profiles) a daemon connects at once. One more is refused with `RelayCloseCode.anotherBrowser` */
 export const MAX_BROWSERS = 8;

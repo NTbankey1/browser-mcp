@@ -1,4 +1,3 @@
-import { PRODUCT_NAME } from "@browsermcp/protocol";
 import { type Browser, browser } from "wxt/browser";
 
 import {
@@ -8,6 +7,7 @@ import {
   type ExtensionRequest,
   type ExtensionState,
   LEGACY_PORT,
+  PRODUCT_NAME,
   RELAY_PORTS,
   RELAY_PROTOCOL_VERSION,
   createBrowserId,
@@ -55,8 +55,7 @@ import {
 } from "./tab-groups";
 
 /** What every command answers while the user has pressed **Stop** */
-export const PAUSED_MESSAGE =
-  `The user paused ${PRODUCT_NAME}. Ask them to click Resume in its popup`;
+export const PAUSED_MESSAGE = `The user paused ${PRODUCT_NAME}. Ask them to click Resume in its popup`;
 
 export const WATCHDOG_ALARM = "browser-control-watchdog";
 

@@ -11,11 +11,10 @@ import {
   RelayCloseCode,
   RelayPaths,
   type RelayStatus,
+  PRODUCT_NAME,
   RelayUpdateReason,
   createPairingNonce,
 } from "@browsermcp/protocol";
-
-import { PRODUCT_NAME } from "@browsermcp/protocol";
 
 import type { ConnectionStatus } from "../types";
 import { createChallenge, getPairingCode } from "./pairing";

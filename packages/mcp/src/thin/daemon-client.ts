@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import WebSocket from "ws";
 
-import { PRODUCT_NAME, RelayPaths, type RelayStatus } from "@browsermcp/protocol";
+import {
+  PRODUCT_NAME,
+  RelayPaths,
+  type RelayStatus,
+} from "@browsermcp/protocol";
 
 import {
   type Capability,
