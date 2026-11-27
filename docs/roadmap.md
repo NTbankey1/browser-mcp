@@ -57,21 +57,21 @@ Status is what the code does today, not what a command's name suggests.
     ratios, treats a PNG's transparency as a mask, and calibrates its pixels
     against `innerWidth`, so a 125% page or a retina screen needs no flags. Two
     equally good matches are `[image-ambiguous]` until `--nth` picks one (in
-    page order); none is `[image-not-found]`. It finds a canvas button, a
-    closed shadow root and a cross-origin frame, which no selector can name.
-    Native engine only: the Node engine doesn't implement it yet, and the suite
-    reports test 25 as skipped there.
+    page order) or `--in <target>` narrows the search to one element; none is
+    `[image-not-found]`. It finds a canvas button, a closed shadow root and a
+    cross-origin frame, which no selector can name. Native engine only: the
+    Node engine doesn't implement it yet, and the suite reports test 25 as
+    skipped there.
 
 ## Still open
 
 12. **Beyond the viewport.** `--image` searches what is on screen; a control
-    further down the page needs `scroll` first. Scrolling while searching, and
-    matching inside a region (`--in <target>`), are the next steps. Element
-    finding by color or by OCR is not planned.
+    further down the page needs `scroll` first. Scrolling while searching is
+    the next step. Element finding by color or by OCR is not planned.
 
 ## Order for the next pass
 
-- `--image` inside a region, then a scroll-while-searching mode.
+- A scroll-while-searching mode for `--image`.
 - Node-engine parity for `--image` (a PNG/JPEG decoder in TypeScript, sharing
   the fixture images and expected points with the Go tests).
 
