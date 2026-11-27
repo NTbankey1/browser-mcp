@@ -134,3 +134,29 @@ func TestWriteCallTrace(t *testing.T) {
 		t.Fatalf("output not recorded: %+v", record.Output)
 	}
 }
+
+func TestVisualDiffIsItsOwnCode(t *testing.T) {
+	message := "the screenshot differs from base.jpg (100 bytes against 90)"
+	if got := classify(message); got != CodeVisualDiff {
+		t.Fatalf("classify(%q) = %q, want %q", message, got, CodeVisualDiff)
+	}
+}
+
+func TestSessionSnapshotRoundTrip(t *testing.T) {
+	snapshot := sessionSnapshot{
+		SavedAt: "2026-01-01T00:00:00Z",
+		URLs:    []string{"https://a.test/", "https://b.test/"},
+		Active:  1,
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back sessionSnapshot
+	if err := json.Unmarshal(encoded, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.Active != 1 || len(back.URLs) != 2 || back.URLs[0] != "https://a.test/" {
+		t.Fatalf("round trip lost data: %+v", back)
+	}
+}

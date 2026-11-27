@@ -77,7 +77,15 @@ call it makes is the anonymous download the user asked for).
   call. It contains page text, so it is created `0600` in a `0700` directory and
   is off unless the user sets the variable.
 
-Not yet: visual assertions and session snapshot; see [roadmap.md](roadmap.md).
+- **A session that honours the allowlist**: `session restore` refuses a saved
+  URL the allowlist blocks, so a snapshot file cannot take the browser somewhere
+  `goto` would not.
+- **A baseline, when asked for**: `screenshot --expect <file>` writes a file the
+  first time and compares byte for byte afterwards; it lives wherever the user
+  pointed it, under the MCP roots like any other file the tool writes.
+
+Not yet: element finding by image, and cookie restore (by design); see
+[roadmap.md](roadmap.md).
 
 ## Reporting
 

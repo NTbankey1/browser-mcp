@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -202,9 +203,9 @@ func init() {
 			Flags: FlagSpec{"max": true}, MaxArgs: 3, Reads: true, Run: runGet,
 		},
 		{
-			Name: "screenshot", Usage: "screenshot [<target>] [--full] [--path <file>]   # JPEG, longest side ≤ 1568 px",
-			Help:  "Adds a JPEG of the viewport (or the element, or the full page) to the result, longest side ≤ 1568 px. --path also saves it.",
-			Flags: FlagSpec{"full": false, "path": true}, MaxArgs: 1, Reads: true, Run: runScreenshot,
+			Name: "screenshot", Usage: "screenshot [<target>] [--full] [--path <file>] [--expect <file>]   # JPEG; --expect compares a baseline",
+			Help:  "Adds a JPEG of the viewport (or the element, or the full page) to the result, longest side ≤ 1568 px. --path also saves it. --expect compares it with a baseline file: the first run writes the baseline, later runs fail with [visual-diff] when the image differs.",
+			Flags: FlagSpec{"full": false, "path": true, "expect": true}, MaxArgs: 1, Reads: true, Run: runScreenshot,
 		},
 		{
 			Name: "pdf", Usage: "pdf [<path>] [--landscape]   # saves the page as a PDF",
@@ -217,6 +218,11 @@ func init() {
 			Help:  fmt.Sprintf("Saves a file: first as the page would fetch it (its cookies, same origin), then, for a URL on another site, with a plain request from this program that carries no cookies, so public files download from any site and a file behind a login does not. Up to %d MB.", DownloadMaxBytes/1024/1024),
 			Flags: FlagSpec{"path": true}, MaxArgs: 1,
 			Timeout: func(ParsedArgs) time.Duration { return 60 * time.Second }, Run: runDownload,
+		},
+		{
+			Name: "session", Usage: "session save <file> | session restore <file>   # the app's tabs",
+			Help:    "Saves the tabs this AI app is using (their URLs and which one was current) to a JSON file, or opens them again in the same browser: `restore` makes the saved current tab current, and refuses a URL the allowlist blocks.",
+			MaxArgs: 2, Run: runSession,
 		},
 		{
 			Name: "eval", Usage: `eval "<function>" [<target>]   # runs in the page; e.g. eval "() => location.href"`,
@@ -1362,6 +1368,19 @@ func runScreenshot(ctx context.Context, c *stepContext) error {
 			return err
 		}
 		c.Note("saved " + path)
+	}
+	if expect, ok := c.args.Value("expect"); ok {
+		_, _, baseline, readErr := c.session.IO.ReadFile(ctx, expect)
+		if readErr != nil {
+			if err := saveFile(ctx, c.session.IO, expect, data, false); err != nil {
+				return err
+			}
+			c.Note("baseline written to " + expect)
+		} else if !bytes.Equal(baseline, data) {
+			return stepErrorf("the screenshot differs from %s (%d bytes against %d); save a new baseline with `screenshot --path %s`", expect, len(data), len(baseline), expect)
+		} else {
+			c.Note("matches the baseline " + expect)
+		}
 	}
 	c.Image(data, "image/jpeg")
 	return nil
