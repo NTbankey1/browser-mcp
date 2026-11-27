@@ -89,10 +89,12 @@ harness, not on the web". Last run (Wikipedia, Wikimedia):
   blocked command ends, or leave it for `dialog accept`/`dismiss`. The suite
   asserts the property that matters — the call returns, and the page ends in a
   resolved state.
-- **Engine coverage**: the browser suite spawns the MCP server, which starts the
-  **Node** daemon unless `BROWSER_MCP_DAEMON=go` is set. Setting it in this
-  checkout still produced the Node engine's wording, so the suite is evidence
-  for the Node engine; the Go engine (the one this machine runs) is covered by
-  `go test ./...` — its unit tests plus the CDP integration suite.
+- **Engine coverage, unresolved**: the browser suite spawns the MCP server, which
+  starts the **Node** daemon unless `BROWSER_MCP_DAEMON=go` is set. With that
+  variable set, test 15 still saw no `[no-element]` code, while `go test` proves
+  the Go engine adds it. Both engines word a missed target identically, so the
+  cause is not yet known — the suite may be running the Node daemon or an older
+  binary. Until it is settled, the Go engine's evidence is `go test ./...`
+  (unit + the CDP integration suite) plus the manual runs recorded below.
 - No per-script budget, trace export, visual assertions or session snapshot yet;
   see [roadmap.md](roadmap.md).

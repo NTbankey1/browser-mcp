@@ -1115,13 +1115,15 @@ describe("response limits", () => {
 
 describe("idle release", () => {
   it("releases tabs idle longer than idleReleaseMs and claims them again on use", async () => {
-    const idle = await startHarness({ idleReleaseMs: 300 });
+    // Generous against the scheduler: with 300 ms, a slow runner released the
+    // tab between `goto` and the check, and the test raced its own timer.
+    const idle = await startHarness({ idleReleaseMs: 1500 });
     try {
       const s = idle.openSession();
       await idle.run(s, `goto ${idle.fixtures.url("/misc")}`);
       const tabId = Number(/\* (\d+)/.exec(await idle.run(s, "tab list"))?.[1]);
       expect(idle.backend.isClaimed(tabId)).toBe(true);
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 2500));
       expect(idle.backend.isClaimed(tabId)).toBe(false);
       expect(await idle.run(s, "get title")).toContain("Misc");
       expect(idle.backend.isClaimed(tabId)).toBe(true);
