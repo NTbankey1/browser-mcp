@@ -230,6 +230,8 @@ func (c *Client) Request(ctx context.Context, method string, params any, timeout
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case response := <-answer:
 		if response.Error != "" {
 			return nil, errors.New(response.Error)
