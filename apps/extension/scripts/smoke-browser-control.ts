@@ -763,9 +763,14 @@ get text #out`,
       ),
       result.text,
     );
-    // The Go engine names the class of the failure, so an agent can branch on
-    // it; the Node engine still reports the message alone.
-    if (process.env.BROWSER_MCP_DAEMON === "go") {
+    // The native Go engine names the class of the failure, so an agent can
+    // branch on it; the Node engine still reports the message alone. The Go
+    // front door alone is not enough: by default it hands calls to the Node
+    // engine, so the assertion needs the native engine too.
+    if (
+      process.env.BROWSER_MCP_DAEMON === "go" &&
+      process.env.BROWSER_MCP_ENGINE === "native"
+    ) {
       expect(/\[no-element\]|\[timeout\]/.test(result.text), result.text);
     }
   });

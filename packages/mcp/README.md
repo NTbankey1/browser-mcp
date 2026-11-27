@@ -78,7 +78,7 @@ BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native node packages/mcp/dist/index.js
 ```
 
 Status: the tool's commands are implemented natively and the repository's
-real-extension smoke test passes 20/20 with this engine. It is **not** the
+real-extension smoke test passes 32/32 with this engine. It is **not** the
 default: large-page snapshots are slower than Playwright's, and a few behaviours
 differ (raw `cdp` session isolation, cross-origin `frameLocator`). See
 `docs/migration/COMPATIBILITY_MATRIX.md`. Unset `BROWSER_MCP_ENGINE` to go back

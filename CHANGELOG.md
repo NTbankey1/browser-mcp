@@ -45,8 +45,10 @@ semantic versioning.
 
 ### Known
 
-- The browser suite drives the Node engine; `BROWSER_MCP_DAEMON=go` did not
-  switch it in this checkout, so the Go engine is covered by `go test ./...`.
+- The browser suite runs the Node engine by default and the native Go engine
+  with `BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`; both pass 32/32.
+  `BROWSER_MCP_DAEMON=go` alone is the Go front door, which hands calls to the
+  Node engine.
 
 - `PRODUCT_NAME` in `@browsermcp/protocol` and `brand.Name` in the Go daemon:
   the product's name has one source per side, and every message, the MCP
