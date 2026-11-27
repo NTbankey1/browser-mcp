@@ -34,6 +34,9 @@ semantic versioning.
   change a page report what they would do instead of doing it.
 - `request` redacts `Authorization`, `Cookie`, `Set-Cookie`,
   `Proxy-Authorization` and `X-Api-Key`.
+- `BROWSER_MCP_CALL_BUDGET_MS`: a budget for a whole call, not just one step.
+- `BROWSER_MCP_TRACE_DIR`: one JSON line per call in `calls.jsonl` — commands,
+  output, failure flag and duration — for replaying a failure.
 
 ### Known
 

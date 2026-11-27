@@ -71,8 +71,13 @@ call it makes is the anonymous download the user asked for).
 - **Bounded failures**: every step has a deadline (30 s by default), so a page
   that blocks a CDP call cannot hang a call for minutes.
 
-Not yet: a per-script budget, an exportable trace, and visual assertions; see
-[roadmap.md](roadmap.md).
+- **A call budget**: `BROWSER_MCP_CALL_BUDGET_MS` stops a script that runs too
+  long, so no call can hold the browser indefinitely.
+- **A trace, when asked for**: `BROWSER_MCP_TRACE_DIR` writes one JSON line per
+  call. It contains page text, so it is created `0600` in a `0700` directory and
+  is off unless the user sets the variable.
+
+Not yet: visual assertions and session snapshot; see [roadmap.md](roadmap.md).
 
 ## Reporting
 
