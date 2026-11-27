@@ -68,9 +68,9 @@ func init() {
 		},
 		{
 			Name:  "click",
-			Usage: "click <target> [--double] [--button right|middle] [--modifiers Shift,Control] | click --image <file>",
-			Help:  "Clicks the element's center after scrolling it into view. Fails if it's hidden, disabled or covered (naming what covers it). Waits for a navigation it starts. --image <file> finds a picture (PNG or JPEG) in the viewport and clicks its center, for a control no selector can name: a canvas, a closed shadow root, a cross-origin frame. --min-score <0.9> sets how alike a match must be; --nth picks one of several matches.",
-			Flags: FlagSpec{"double": false, "button": true, "modifiers": true, "image": true, "min-score": true, "nth": true}, MaxArgs: 1,
+			Usage: "click <target> [--double] [--button right|middle] [--modifiers Shift,Control] | click --image <file> [--in <target>]",
+			Help:  "Clicks the element's center after scrolling it into view. Fails if it's hidden, disabled or covered (naming what covers it). Waits for a navigation it starts. --image <file> finds a picture (PNG or JPEG) in the viewport and clicks its center, for a control no selector can name: a canvas, a closed shadow root, a cross-origin frame. --min-score <0.9> sets how alike a match must be; --nth picks one of several matches; --in <target> searches inside one element, for the same icon in a row or a menu.",
+			Flags: FlagSpec{"double": false, "button": true, "modifiers": true, "image": true, "min-score": true, "nth": true, "in": true}, MaxArgs: 1,
 			Run: runClick,
 		},
 		{
@@ -193,9 +193,9 @@ func init() {
 			Run: runSnapshot,
 		},
 		{
-			Name: "find", Usage: `find "<text>" [--max <chars>|all] | find --image <file>   # snapshot lines containing the text, or a picture on screen`,
-			Help:  "Prints the snapshot lines whose name, text or URL contain the text (ignoring case), each with its ancestors. --max <chars> caps the printed characters. --image <file> finds a picture (PNG or JPEG) in the viewport instead, and prints where it is, its score, and the element under it; it fails with [image-not-found] when there is none, and with [image-ambiguous] when several places match alike (--nth chooses one, --min-score sets how alike a match must be).",
-			Flags: FlagSpec{"max": true, "image": true, "min-score": true, "nth": true}, MaxArgs: 1, Reads: true, Run: runFind,
+			Name: "find", Usage: `find "<text>" [--max <chars>|all] | find --image <file> [--in <target>]   # snapshot lines containing the text, or a picture on screen`,
+			Help:  "Prints the snapshot lines whose name, text or URL contain the text (ignoring case), each with its ancestors. --max <chars> caps the printed characters. --image <file> finds a picture (PNG or JPEG) in the viewport instead, and prints where it is, its score, and the element under it; it fails with [image-not-found] when there is none, and with [image-ambiguous] when several places match alike (--nth chooses one, --min-score sets how alike a match must be, and --in <target> searches inside one element only).",
+			Flags: FlagSpec{"max": true, "image": true, "min-score": true, "nth": true, "in": true}, MaxArgs: 1, Reads: true, Run: runFind,
 		},
 		{
 			Name: "get", Usage: "get text|value|count [<target>] [--max <chars>|all] | get attr <name> <target> | get url | get title",

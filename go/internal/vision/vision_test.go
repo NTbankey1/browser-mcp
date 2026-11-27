@@ -197,6 +197,24 @@ func TestTransparentPixelsAreAMask(t *testing.T) {
 	}
 }
 
+func TestCrop(t *testing.T) {
+	scene := FromImage(background(40, 30))
+	cropped := scene.Crop(10, 5, 20, 10)
+	if cropped.W != 20 || cropped.H != 10 {
+		t.Fatalf("crop is %d×%d, expected 20×10", cropped.W, cropped.H)
+	}
+	if cropped.Gray[0] != scene.Gray[5*40+10] {
+		t.Fatalf("crop starts at %v, expected %v", cropped.Gray[0], scene.Gray[5*40+10])
+	}
+	clamped := scene.Crop(30, 25, 100, 100)
+	if clamped.W != 10 || clamped.H != 5 {
+		t.Fatalf("clamped crop is %d×%d, expected 10×5", clamped.W, clamped.H)
+	}
+	if empty := scene.Crop(50, 50, 10, 10); empty.W != 0 || empty.H != 0 {
+		t.Fatalf("crop outside the image is %d×%d, expected empty", empty.W, empty.H)
+	}
+}
+
 // A flat template would score 1 against every flat area; it scores 0 instead.
 func TestFlatTemplateMatchesNothing(t *testing.T) {
 	flat := image.NewGray(image.Rect(0, 0, 20, 20))

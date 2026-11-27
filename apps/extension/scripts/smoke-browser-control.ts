@@ -997,14 +997,25 @@ get text #out`,
             ambiguous.isError && ambiguous.text.includes("[image-ambiguous]"),
             ambiguous.text,
           );
-          // Page order: the right one is second
-          const second = await call(
+          // Page order: the left one is first
+          const first = await call(
             alpha,
-            "click --image twin.jpg --nth 2\nget title",
+            "click --image twin.jpg --nth 1\nget title",
+          );
+          expect(!first.isError && first.text.includes("twin 0"), first.text);
+          // --in settles it too, without --nth
+          const right = await call(
+            alpha,
+            `click --image twin.jpg --in "#right"\nget title`,
+          );
+          expect(!right.isError && right.text.includes("twin 1"), right.text);
+          const scoped = await call(
+            alpha,
+            `find --image twin.jpg --in "#left"`,
           );
           expect(
-            !second.isError && second.text.includes("twin 1"),
-            second.text,
+            !scoped.isError && /found twin\.jpg/.test(scoped.text),
+            scoped.text,
           );
         } finally {
           await resetZoom().catch(() => {});

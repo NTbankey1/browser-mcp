@@ -27,6 +27,11 @@ type imageOptions struct {
 	// Nth picks one of several matches, 1-based; 0 means the best must be
 	// unambiguous.
 	Nth int
+	// In limits the search to one element, which settles the common case of
+	// the same icon in a row or a menu; nil searches the viewport.
+	In *Target
+	// InSource is the --in argument as written, for messages.
+	InSource string
 }
 
 // readImageOptions reads the shared flags. The caller checks --image first:
@@ -52,6 +57,14 @@ func readImageOptions(c *stepContext) (imageOptions, error) {
 		}
 		options.Nth = nth
 	}
+	if raw, ok := c.args.Value("in"); ok {
+		target, err := ParseTarget(raw)
+		if err != nil {
+			return imageOptions{}, err
+		}
+		options.In = &target
+		options.InSource = raw
+	}
 	return options, nil
 }
 
@@ -64,6 +77,17 @@ type imageHit struct {
 	// scale is the screenshot's pixels per CSS pixel (a 125% page or a
 	// retina screen isn't 1).
 	scale float64
+}
+
+// viewport is the page's visible area: its size and where it starts in the
+// page's coordinates (the screenshot's clip).
+type viewport struct {
+	Width, Height, ScrollX, ScrollY float64
+}
+
+// rect is an element's box in page coordinates (CSS pixels).
+type rect struct {
+	X, Y, Width, Height float64
 }
 
 // pointElement says what sits under a point: the page's own answer, so a
@@ -91,7 +115,7 @@ func locateImage(ctx context.Context, c *stepContext, state *TabState, options i
 	if template.Count == 0 {
 		return imageHit{}, stepErrorf("%s is fully transparent, so there is nothing to look for", options.Path)
 	}
-	png, cssWidth, cssHeight, err := captureViewport(ctx, state.Tab)
+	png, view, err := captureViewport(ctx, state.Tab)
 	if err != nil {
 		return imageHit{}, err
 	}
@@ -100,9 +124,41 @@ func locateImage(ctx context.Context, c *stepContext, state *TabState, options i
 		return imageHit{}, stepErrorf("Couldn't read the screenshot Chrome returned: %s", err)
 	}
 	scene := vision.FromImage(sceneImage)
-	scaleX, scaleY := float64(scene.W)/cssWidth, float64(scene.H)/cssHeight
+	scaleX, scaleY := float64(scene.W)/view.Width, float64(scene.H)/view.Height
 	if scaleX <= 0 || scaleY <= 0 {
 		return imageHit{}, stepErrorf("The screenshot has no pixels to search")
+	}
+	// The match is found in the crop when --in is given, so every coordinate
+	// gets the crop's origin back before it is turned into a viewport point.
+	originX, originY := 0, 0
+	if options.In != nil {
+		region, err := regionRect(ctx, state, *options.In)
+		if err != nil {
+			return imageHit{}, err
+		}
+		left, top := region.X-view.ScrollX, region.Y-view.ScrollY
+		if left+region.Width <= 0 || top+region.Height <= 0 || left >= view.Width || top >= view.Height {
+			return imageHit{}, stepErrorf("%s isn't on screen; scroll to it, or search without --in", options.InSource)
+		}
+		cropX := int(math.Round(left * scaleX))
+		cropY := int(math.Round(top * scaleY))
+		cropW := int(math.Round(region.Width * scaleX))
+		cropH := int(math.Round(region.Height * scaleY))
+		if cropX < 0 {
+			originX = 0
+		} else {
+			originX = cropX
+		}
+		if cropY < 0 {
+			originY = 0
+		} else {
+			originY = cropY
+		}
+		cropped := scene.Crop(cropX, cropY, cropW, cropH)
+		if cropped.W == 0 || cropped.H == 0 {
+			return imageHit{}, stepErrorf("Nothing of %s is on screen; scroll to it, or search without --in", options.InSource)
+		}
+		scene = cropped
 	}
 
 	matches := vision.Search(scene, template, vision.Options{MaxMatches: 5})
@@ -120,7 +176,7 @@ func locateImage(ctx context.Context, c *stepContext, state *TabState, options i
 		bestX, bestY := best.Center()
 		return imageHit{}, stepErrorf(
 			"The image %s wasn't found on screen: the best match scored %.2f at %d,%d, under --min-score %.2f. Scroll the page, take a screenshot to check, or lower --min-score",
-			options.Path, best.Score, int(bestX/scaleX), int(bestY/scaleY), options.MinScore,
+			options.Path, best.Score, int((float64(originX)+bestX)/scaleX), int((float64(originY)+bestY)/scaleY), options.MinScore,
 		)
 	}
 	chosen := passing[0]
@@ -132,16 +188,24 @@ func locateImage(ctx context.Context, c *stepContext, state *TabState, options i
 		chosen = ordered[options.Nth-1]
 	} else if len(passing) > 1 && passing[1].Score >= chosen.Score-ambiguousMargin {
 		return imageHit{}, stepErrorf(
-			"The image matches %d places; choose one with --nth 1-%d (top to bottom, left to right): %s",
-			len(passing), len(passing), describePlaces(ordered, scaleX, scaleY),
+			"The image matches %d places%s; choose one with --nth 1-%d (top to bottom, left to right): %s",
+			len(passing), inPhrase(options.InSource), len(passing), describePlaces(ordered, originX, originY, scaleX, scaleY),
 		)
 	}
 	centerX, centerY := chosen.Center()
 	return imageHit{
 		match: chosen,
-		point: pointer{X: centerX / scaleX, Y: centerY / scaleY, MainFrame: true},
+		point: pointer{X: (float64(originX) + centerX) / scaleX, Y: (float64(originY) + centerY) / scaleY, MainFrame: true},
 		scale: scaleX,
 	}, nil
+}
+
+// inPhrase says where the search was limited, for messages.
+func inPhrase(inSource string) string {
+	if inSource == "" {
+		return ""
+	}
+	return " in " + inSource
 }
 
 // pageOrder sorts matches the way a reader meets them: top to bottom, then
@@ -159,53 +223,77 @@ func pageOrder(matches []vision.Match) []vision.Match {
 }
 
 // describePlaces lists matches as viewport points and scores.
-func describePlaces(matches []vision.Match, scaleX, scaleY float64) string {
+func describePlaces(matches []vision.Match, originX, originY int, scaleX, scaleY float64) string {
 	places := make([]string, 0, len(matches))
 	for _, match := range matches {
 		x, y := match.Center()
-		places = append(places, fmt.Sprintf("(%d,%d) %.2f", int(x/scaleX), int(y/scaleY), match.Score))
+		places = append(places, fmt.Sprintf("(%d,%d) %.2f", int((float64(originX)+x)/scaleX), int((float64(originY)+y)/scaleY), match.Score))
 	}
 	return strings.Join(places, ", ")
+}
+
+// regionRect is an element's box in page coordinates, the space the
+// screenshot's clip uses.
+func regionRect(ctx context.Context, state *TabState, target Target) (rect, error) {
+	res := Resolver{Tab: state.Tab, Refs: state.BackendNodeID}
+	objectID, err := res.One(ctx, target, FindTimeout)
+	if err != nil {
+		return rect{}, err
+	}
+	result, err := callFunction(ctx, state.Tab, objectID, `function(){
+  const r = this.getBoundingClientRect();
+  return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height };
+}`, true)
+	if err != nil {
+		return rect{}, err
+	}
+	var reply struct {
+		Result struct {
+			Value rect `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &reply); err != nil {
+		return rect{}, err
+	}
+	return reply.Result.Value, nil
 }
 
 // captureViewport screenshots the visible page losslessly, for matching: the
 // screenshot the tool shows a model is a JPEG, which blurs the very pixels
 // the comparison needs. The clip is in page coordinates, like the element
 // screenshot's.
-func captureViewport(ctx context.Context, tab *cdp.Tab) ([]byte, float64, float64, error) {
+func captureViewport(ctx context.Context, tab *cdp.Tab) ([]byte, viewport, error) {
 	if err := ensureVisible(ctx, tab); err != nil {
-		return nil, 0, 0, err
+		return nil, viewport{}, err
 	}
-	var viewport struct {
-		Width, Height, ScrollX, ScrollY float64
+	var view viewport
+	if err := tab.Eval(ctx, "({width: innerWidth, height: innerHeight, scrollX: window.scrollX, scrollY: window.scrollY})", &view); err != nil {
+		return nil, viewport{}, err
 	}
-	if err := tab.Eval(ctx, "({width: innerWidth, height: innerHeight, scrollX: window.scrollX, scrollY: window.scrollY})", &viewport); err != nil {
-		return nil, 0, 0, err
-	}
-	if viewport.Width < 1 || viewport.Height < 1 {
-		return nil, 0, 0, stepErrorf("The page has no viewport to search")
+	if view.Width < 1 || view.Height < 1 {
+		return nil, viewport{}, stepErrorf("The page has no viewport to search")
 	}
 	result, err := tab.Send(ctx, "Page.captureScreenshot", map[string]any{
 		"format": "png",
 		"clip": map[string]any{
-			"x": viewport.ScrollX, "y": viewport.ScrollY,
-			"width": viewport.Width, "height": viewport.Height, "scale": 1.0,
+			"x": view.ScrollX, "y": view.ScrollY,
+			"width": view.Width, "height": view.Height, "scale": 1.0,
 		},
 	})
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, viewport{}, err
 	}
 	var reply struct {
 		Data string `json:"data"`
 	}
 	if err := json.Unmarshal(result, &reply); err != nil {
-		return nil, 0, 0, err
+		return nil, viewport{}, err
 	}
 	png, err := base64.StdEncoding.DecodeString(reply.Data)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, viewport{}, err
 	}
-	return png, viewport.Width, viewport.Height, nil
+	return png, view, nil
 }
 
 // describePoint asks the page what is under a viewport point.

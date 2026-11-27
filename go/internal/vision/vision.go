@@ -50,6 +50,34 @@ func FromImage(img image.Image) *Image {
 	return out
 }
 
+// Crop returns the part of the image inside the rectangle, clamped to the
+// image. A rectangle with no area left after clamping gives an empty image.
+func (im *Image) Crop(x, y, w, h int) *Image {
+	left, top := x, y
+	right, bottom := x+w, y+h
+	if left < 0 {
+		left = 0
+	}
+	if top < 0 {
+		top = 0
+	}
+	if right > im.W {
+		right = im.W
+	}
+	if bottom > im.H {
+		bottom = im.H
+	}
+	if right <= left || bottom <= top {
+		return &Image{}
+	}
+	out := &Image{W: right - left, H: bottom - top}
+	out.Gray = make([]float32, out.W*out.H)
+	for row := 0; row < out.H; row++ {
+		copy(out.Gray[row*out.W:(row+1)*out.W], im.Gray[(top+row)*im.W+left:(top+row)*im.W+right])
+	}
+	return out
+}
+
 // luma is Rec. 709 luminance, the weights Chrome's screenshots are built from.
 func luma(c color.Color) float32 {
 	r, g, b, _ := c.RGBA()

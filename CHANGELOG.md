@@ -50,8 +50,9 @@ semantic versioning.
   click its center, for controls no selector can name — a canvas, a closed
   shadow root, a cross-origin frame. A grayscale correlation pyramid tries the
   common zoom and pixel ratios, reads a PNG's transparency as a mask, and
-  reports `[image-not-found]` or `[image-ambiguous]` (`--nth` picks one).
-  Native engine only for now.
+  reports `[image-not-found]` or `[image-ambiguous]` (`--nth` picks one, and
+  `--in <target>` searches inside one element only). Native engine only for
+  now.
 
 ### Known
 
