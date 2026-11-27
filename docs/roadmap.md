@@ -9,7 +9,7 @@ Status is what the code does today, not what a command's name suggests.
 | ---------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Explicit and condition-based waiting     | **Exists**            | `wait <ms>`, `wait --text`, `wait --gone`, `wait --url`, `wait <target>`, `--timeout`                                                                       |
 | URL and navigation verification          | **Exists**            | `get url`, `goto --wait commit\|dom\|load`                                                                                                                  |
-| Timeout management                       | **Exists**            | every step has a deadline (30 s by default, `--timeout` per step); no whole-script budget yet                                                               |
+| Timeout management                       | **Exists**            | every step has a deadline (30 s by default, `--timeout` per step), and `BROWSER_MCP_CALL_BUDGET_MS` bounds the whole call                                   |
 | Retry and error recovery                 | **Exists (bounded)**  | a read is re-run after a re-attach or a timeout; a write only when nothing ran (`no-element`), once                                                         |
 | Stale element detection                  | **Exists (bounded)**  | the locator resolves again on the retry; the failure says `[no-element]`                                                                                    |
 | Dialog handling                          | **Exists**            | `dialog accept`/`dismiss`; a blocked session is bounded by the step's deadline, and the failure names the dialog                                            |
@@ -18,7 +18,7 @@ Status is what the code does today, not what a command's name suggests.
 | Multi-tab and session isolation          | **Exists**            | `tab list/new/select/close`, one tab group per AI app                                                                                                       |
 | Visual automation                        | **Partial**           | `screenshot`, `pdf`; no visual assertions or element finding by image                                                                                       |
 | Workflow execution                       | **Exists**            | a call is a script of commands, one per line                                                                                                                |
-| Logging and tracing                      | **Partial**           | step lines, `console`, `requests`, `request --body`; no exportable trace                                                                                    |
+| Logging and tracing                      | **Exists**            | step lines, `console`, `requests`, `request --body`, and `BROWSER_MCP_TRACE_DIR` for a per-call JSONL trace                                                 |
 | Security and prompt-injection protection | **Exists (opt-in)**   | page text is data; `BROWSER_MCP_ALLOW_DOMAINS` limits navigation; `BROWSER_MCP_CONFIRM=1` reports writes instead of doing them; credential headers redacted |
 
 ## Done in this pass
@@ -37,13 +37,15 @@ Status is what the code does today, not what a command's name suggests.
    `dialog` into a report of what would run, leaving the page untouched.
 6. **Credential redaction.** `request` prints `Authorization`, `Cookie`,
    `Set-Cookie`, `Proxy-Authorization` and `X-Api-Key` as `[redacted]`.
+7. **A per-call budget.** `BROWSER_MCP_CALL_BUDGET_MS` bounds the whole script;
+   when it ends, the call says so and the remaining lines are named as not run.
+8. **Trace export.** `BROWSER_MCP_TRACE_DIR` appends one JSON line per call —
+   commands, the lines the tool returned, failure flag and duration — to
+   `calls.jsonl`. The file holds page text, so it is `0600` under a `0700`
+   directory.
 
 ## Still open
 
-7. **A per-script budget.** `--timeout` is per step; a long script can still run
-   for minutes. A `--budget <ms>` on the call is the next step.
-8. **Trace export.** Each call could append a JSON line (commands, step
-   results, timing) under the MCP root, so a failure can be replayed.
 9. **Visual assertions.** `screenshot` exists, but nothing compares against a
    baseline.
 10. **Session snapshot/restore.** A job that must survive a restart cannot save
@@ -51,8 +53,8 @@ Status is what the code does today, not what a command's name suggests.
 
 ## Order for the next pass
 
-7 (budget) → 8 (trace) → 9 (visual) → 10 (snapshot). The first two are
-mechanical; the last two need a design decision about where state lives.
+9 (visual) → 10 (snapshot). Both need a design decision: where a baseline and
+a saved session live, and what "the same" means for a screenshot.
 
 11. **The suite does not switch engines.** `BROWSER_MCP_DAEMON=go` should make
     the server start `bin/browsermcpd`; the browser suite still reported the

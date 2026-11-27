@@ -1,8 +1,12 @@
 package engine
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClassify(t *testing.T) {
@@ -91,5 +95,42 @@ func TestConfirmModeAndWrites(t *testing.T) {
 	}
 	if !strings.Contains(ErrorMessageWithCode(stepErrorf("HTTP 500 for x")), "[http]") {
 		t.Error("a step line should carry the code")
+	}
+}
+
+func TestCallBudget(t *testing.T) {
+	t.Setenv("BROWSER_MCP_CALL_BUDGET_MS", "")
+	if _, ok := callBudget(); ok {
+		t.Fatal("unset must mean no budget")
+	}
+	t.Setenv("BROWSER_MCP_CALL_BUDGET_MS", "1500")
+	limit, ok := callBudget()
+	if !ok || limit != 1500*time.Millisecond {
+		t.Fatalf("callBudget() = %v, %v; want 1.5s, true", limit, ok)
+	}
+	t.Setenv("BROWSER_MCP_CALL_BUDGET_MS", "not-a-number")
+	if _, ok := callBudget(); ok {
+		t.Fatal("an invalid value must mean no budget")
+	}
+}
+
+func TestWriteCallTrace(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "traces")
+	lines := []checkedLine{{echo: "get url"}}
+	writeCallTrace(dir, "app-1", lines, []string{"✓ get url", "https://example.com"}, true, time.Now())
+
+	data, err := os.ReadFile(filepath.Join(dir, "calls.jsonl"))
+	if err != nil {
+		t.Fatalf("trace file: %v", err)
+	}
+	var record callTrace
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatalf("trace is not JSON: %v", err)
+	}
+	if record.App != "app-1" || !record.Failed || len(record.Commands) != 1 || record.Commands[0] != "get url" {
+		t.Fatalf("unexpected trace: %+v", record)
+	}
+	if len(record.Output) != 2 || record.Output[1] != "https://example.com" {
+		t.Fatalf("output not recorded: %+v", record.Output)
 	}
 }
