@@ -301,6 +301,13 @@ func (e *Engine) CallTool(ctx context.Context, sessionID, name string, args map[
 }
 
 func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine, tabLock *tabLock) CallToolResult {
+	started := time.Now()
+	budgetLimit, budgeted := callBudget()
+	if budgeted {
+		var cancelBudget context.CancelFunc
+		ctx, cancelBudget = context.WithTimeout(ctx, budgetLimit)
+		defer cancelBudget()
+	}
 	e.takePending(session)
 	onlyHelp := true
 	for _, line := range lines {
@@ -482,6 +489,9 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 		}
 	}
 
+	if budgeted && ctx.Err() == context.DeadlineExceeded {
+		out = append(out, fmt.Sprintf("The call budget (%s) ran out; run the rest in another call.", budgetLimit))
+	}
 	endURL, endTitle := e.pageInfo(ctx, session, acted || navigated || failed)
 	if endURL != "" && (failed || startURL != endURL || startTitle != endTitle) {
 		out = append(out, fmt.Sprintf("Page: %s — %s", endURL, quote(Truncate(endTitle, 200))))
@@ -491,6 +501,9 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 	}
 	content := []Content{{Type: "text", Text: strings.Join(out, "\n")}}
 	content = append(content, images...)
+	if dir := traceDir(); dir != "" {
+		writeCallTrace(dir, session.App.ID, lines, out, failed, started)
+	}
 	return CallToolResult{Content: content, IsError: failed}
 }
 
