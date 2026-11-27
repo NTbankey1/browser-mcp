@@ -12,7 +12,8 @@
     "go:test": "pnpm --filter @browsermcp/mcp go:test",
     "lint": "oxlint --max-warnings=0",
     "format": "oxfmt --check",
-    "format:fix": "oxfmt"
+    "format:fix": "oxfmt",
+    "test:browser": "tests/browser/run.sh"
   },
   "devDependencies": {
     "oxfmt": "^0.77.0",

@@ -375,6 +375,11 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 			step := &stepContext{engine: e, session: session, args: line.args, line: line,
 				printed: &printed, notes: &notes, images: &images}
 			if err := line.def.Run(stepCtx, step); err != nil {
+				// A native dialog blocks the tab's CDP session until it is
+				// answered, which surfaces as a timeout: name the real cause.
+				if current := e.stateForID(e.currentTab(session)); current != nil && current.Dialog() != nil {
+					return stepErrorf("%s opened. Answer it with `dialog accept` or `dialog dismiss`", current.Dialog().Label())
+				}
 				return err
 			}
 			if line.def.Navigates {
@@ -382,9 +387,31 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 			}
 			tabID = e.currentTab(session)
 			state = e.stateForID(tabID)
+			dialogOpen := state != nil && state.Dialog() != nil
+			if dialogOpen {
+				// A native dialog blocks this tab's CDP session until it is
+				// answered, so stop here: any read, even the URL, would wait.
+				notes = append(notes, fmt.Sprintf("%s opened. Answer it with `dialog accept` or `dialog dismiss`", state.Dialog().Label()))
+				stoppedBy = "a dialog is open"
+				return nil
+			}
 			if !line.def.Navigates && tracksURL && tabID != 0 && before != "" {
-				after, _ := e.quickURL(stepCtx, tabID)
-				if after != "" && after != before {
+				// Its own short deadline: if the step opened a dialog that the
+				// engine's event hasn't reported yet, this probe waits on a
+				// blocked session otherwise.
+				probeCtx, cancelProbe := context.WithTimeout(stepCtx, 2*time.Second)
+				after, probeErr := e.quickURL(probeCtx, tabID)
+				cancelProbe()
+				if probeErr != nil {
+					// Give the dialog's event a moment to arrive, then say so.
+					for deadline := time.Now().Add(700 * time.Millisecond); time.Now().Before(deadline); {
+						if state != nil && state.Dialog() != nil {
+							dialogOpen = true
+							break
+						}
+						time.Sleep(25 * time.Millisecond)
+					}
+				} else if after != "" && after != before {
 					navigated = true
 					notes = append(notes, "→ "+shortURL(after, before))
 				}
@@ -392,7 +419,8 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 			for _, opened := range e.takeOpenedTabs(session) {
 				notes = append(notes, e.openedNote(opened))
 			}
-			if state != nil && state.Dialog() != nil {
+			if dialogOpen || (state != nil && state.Dialog() != nil) {
+				state = e.stateForID(tabID)
 				notes = append(notes, fmt.Sprintf("%s opened. Answer it with `dialog accept` or `dialog dismiss`", state.Dialog().Label()))
 				stoppedBy = "a dialog is open"
 			}
@@ -896,6 +924,11 @@ func urlMatcher(pattern string) func(string) bool {
 	return compiled.MatchString
 }
 
+// DefaultStepTimeout bounds a step that names no timeout of its own, so a CDP
+// call that never answers (a native dialog blocks the tab) fails instead of
+// hanging the call.
+const DefaultStepTimeout = 30 * time.Second
+
 func stepTimeout(line checkedLine, limit time.Duration) time.Duration {
 	own := time.Duration(0)
 	if line.def.Timeout != nil {
@@ -911,7 +944,10 @@ func stepTimeout(line checkedLine, limit time.Duration) time.Duration {
 		}
 	}
 	if own == 0 {
-		return limit
+		if limit > 0 {
+			return limit
+		}
+		return DefaultStepTimeout
 	}
 	return own + StepHeadroom
 }
