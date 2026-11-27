@@ -14,9 +14,9 @@ drives the `browser` tool over stdio as an AI app does. Every check prints one
 line; screenshots, daemon logs and `results.json` land in
 `apps/extension/.output/smoke/`.
 
-**Last run: 33/33 passed** on the native Go engine
+**Last run: 34/34 passed** on the native Go engine
 (`BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`). On the default Node engine
-32 pass and test 25 is reported as skipped: image matching is native-only.
+32 pass and tests 25–26 are reported as skipped: image matching is native-only.
 
 | ID    | Check                                                                                             | Evidence                                                                                                                                                                       |
 | ----- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -43,6 +43,7 @@ line; screenshots, daemon logs and `results.json` land in
 | 23    | **Injected page text is data, not a command**                                                     | the text is returned; the URL is unchanged                                                                                                                                     |
 | 24    | **A twenty-step workflow**                                                                        | order submitted with the four fields set                                                                                                                                       |
 | 25    | **A control found by its picture** (a canvas button at 125% zoom; not found; two identical twins) | the canvas reports a click at its center; `[image-not-found]`; `[image-ambiguous]`, then `--nth 1` clicks the left twin and `--in "#right"` the right one (native engine only) |
+| 26    | **Image matching answers quickly** (five `find --image` calls, screenshot included)               | the median and the max are printed; the slowest stays under 3 s (native engine only)                                                                                           |
 
 ## 2. The real-browser checklist (manual, on the user's own Chrome)
 
@@ -76,6 +77,31 @@ harness, not on the web". Last run (Wikipedia, Wikimedia, and a local canvas pag
 | `BROWSER_MCP_CONFIRM=1` reports a write instead of doing it                                                                                                      | `policy_test.go`            |
 | Credential headers print as `[redacted]`                                                                                                                         | `policy_test.go`            |
 
+### Image matching speed
+
+`go test ./internal/vision -bench . -benchtime=3x` on this machine (i5-1135G7,
+Go 1.24), a 1280×900 screenshot, viewport capture excluded:
+
+| Case                                         | Time    |
+| -------------------------------------------- | ------- |
+| A 24×24 icon, found at the captured scale    | ~23 ms  |
+| The same icon not on the page (all 7 scales) | ~486 ms |
+| A 320×220 card, found at the captured scale  | ~38 ms  |
+| A card not on the page (all 7 scales)        | ~310 ms |
+| A masked 24×24 icon not on the page          | ~384 ms |
+
+End to end, as an agent sees it — the call, the viewport screenshot and the
+IPC included — test 26 measured a median of **114 ms** and a max of 123 ms over
+five `find --image` calls.
+
+How it stays there: the coarse pass strides 2 px and keeps the 64 best
+samples; each is refined at its own level (nothing is suppressed before that,
+because a sample one pixel off the true peak can score far below it), and only
+the 8 survivors are refined at full resolution. Refinement halves the level
+each step instead of searching ±factor at full resolution, which is what made
+a 320×220 template cost a second. A scale that matches at 0.995 ends the
+search, so the common case never visits the other six.
+
 ## What the tests found
 
 - **`screenshot <target>` never worked in the native engine** (and nothing
@@ -108,7 +134,7 @@ harness, not on the web". Last run (Wikipedia, Wikimedia, and a local canvas pag
 - **Engine coverage**: the suite runs the Node engine by default.
   `BROWSER_MCP_DAEMON=go` runs the Go daemon, but that daemon hands calls to the
   Node engine; `BROWSER_MCP_ENGINE=native` runs the Go engine itself. The suite
-  passes 32/32 on the Node engine and 33/33 on the native one (test 25 is
+  passes 32/32 on the Node engine and 34/34 on the native one (tests 25–26 are
   skipped visibly, not counted as passed, where `--image` doesn't exist), and
   the daemon log says `native engine enabled` when the Go engine answers. Test
   15's error-class assertion only applies with the native engine, because the

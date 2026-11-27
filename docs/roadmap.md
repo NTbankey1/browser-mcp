@@ -59,8 +59,10 @@ Status is what the code does today, not what a command's name suggests.
     equally good matches are `[image-ambiguous]` until `--nth` picks one (in
     page order) or `--in <target>` narrows the search to one element; none is
     `[image-not-found]`. It finds a canvas button, a closed shadow root and a
-    cross-origin frame, which no selector can name. Native engine only: the
-    Node engine doesn't implement it yet, and the suite reports test 25 as
+    cross-origin frame, which no selector can name. On a 1280×900 screenshot a
+    24 px icon is found in about 23 ms; a template that isn't there, which
+    makes every scale run, takes about 0.5 s. Native engine only: the Node
+    engine doesn't implement it yet, and the suite reports tests 25 and 26 as
     skipped there.
 
 ## Still open
@@ -80,6 +82,6 @@ Status is what the code does today, not what a command's name suggests.
 `BROWSER_MCP_DAEMON=go` alone runs the **Go front door**, which hands calls to
 the Node engine, so test 15's error-class check saw no `[no-element]`. With
 `BROWSER_MCP_ENGINE=native` as well, the suite runs the native Go engine and
-passes 33/33 (the suite grew test 25); the daemon log says `native engine
+passes 34/34 (the suite grew tests 25–26); the daemon log says `native engine
 enabled`. The test now asserts
 the error class only under the native engine. See [testing.md](testing.md).

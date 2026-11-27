@@ -1,8 +1,10 @@
 package vision
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"math"
 	"testing"
 )
@@ -213,6 +215,103 @@ func TestCrop(t *testing.T) {
 	if empty := scene.Crop(50, 50, 10, 10); empty.W != 0 || empty.H != 0 {
 		t.Fatalf("crop outside the image is %d×%d, expected empty", empty.W, empty.H)
 	}
+}
+
+// Normalized correlation ignores a change of brightness and contrast: a
+// template pulled from one theme still finds the control in another, as long
+// as the colors keep their order.
+func TestBrighterAndDarkerSceneStillMatches(t *testing.T) {
+	picture := icon(22)
+	scene := background(200, 150)
+	darker := image.NewGray(picture.Bounds())
+	for y := 0; y < picture.Bounds().Dy(); y++ {
+		for x := 0; x < picture.Bounds().Dx(); x++ {
+			value := float64(picture.GrayAt(x, y).Y)
+			darker.SetGray(x, y, color.Gray{Y: uint8(value*0.6 + 25)})
+		}
+	}
+	stamp(scene, darker, 70, 50)
+
+	matches := search(scene, picture)
+	if len(matches) == 0 || matches[0].Score < 0.95 {
+		t.Fatalf("%d matches, best %.3f: a darker copy should still match", len(matches), bestScore(matches))
+	}
+	if matches[0].X != 70 || matches[0].Y != 50 {
+		t.Fatalf("match at %d,%d, expected 70,50", matches[0].X, matches[0].Y)
+	}
+}
+
+// A control next to where the template was captured is found where it is now,
+// to the pixel.
+func TestFindsAControlOnePixelAway(t *testing.T) {
+	picture := icon(20)
+	scene := background(200, 150)
+	stamp(scene, picture, 61, 41)
+
+	matches := search(scene, picture)
+	if len(matches) == 0 {
+		t.Fatal("no match")
+	}
+	if matches[0].X != 61 || matches[0].Y != 41 {
+		t.Fatalf("match at %d,%d, expected 61,41", matches[0].X, matches[0].Y)
+	}
+}
+
+// Templates are usually JPEGs, since that is what `screenshot --path` writes.
+func TestJPEGTemplateMatches(t *testing.T) {
+	picture := icon(24)
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, picture, &jpeg.Options{Quality: 80}); err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, err := Decode(encoded.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scene := background(240, 180)
+	stamp(scene, picture, 90, 60)
+
+	matches := Search(FromImage(scene), TemplateFromImage(decoded), Options{})
+	if len(matches) == 0 || matches[0].Score < 0.9 {
+		t.Fatalf("%d matches, best %.3f for a JPEG template", len(matches), bestScore(matches))
+	}
+	if matches[0].X < 89 || matches[0].X > 91 || matches[0].Y < 59 || matches[0].Y > 61 {
+		t.Fatalf("match at %d,%d, expected about 90,60", matches[0].X, matches[0].Y)
+	}
+}
+
+// A tiny template (a 6×6 badge) is still found where it was stamped.
+func TestTinyTemplate(t *testing.T) {
+	picture := image.NewGray(image.Rect(0, 0, 6, 6))
+	values := []uint8{10, 240, 30, 200, 60, 160, 90, 120, 100, 220, 140, 20, 180, 40, 250, 80, 210, 50}
+	for i := range picture.Pix {
+		picture.Pix[i] = values[i%len(values)]
+	}
+	scene := background(120, 90)
+	stamp(scene, picture, 40, 30)
+
+	matches := search(scene, picture)
+	if len(matches) == 0 || matches[0].Score < 0.9 {
+		t.Fatalf("%d matches, best %.3f for a 6 px template", len(matches), bestScore(matches))
+	}
+	if matches[0].X != 40 || matches[0].Y != 30 {
+		t.Fatalf("match at %d,%d, expected 40,30", matches[0].X, matches[0].Y)
+	}
+}
+
+func TestTemplateBiggerThanTheScene(t *testing.T) {
+	scene := FromImage(background(100, 80))
+	template := TemplateFromImage(card(300, 200))
+	if matches := Search(scene, template, Options{}); len(matches) != 0 {
+		t.Fatalf("%d matches for a template larger than the scene", len(matches))
+	}
+}
+
+func bestScore(matches []Match) float64 {
+	if len(matches) == 0 {
+		return 0
+	}
+	return matches[0].Score
 }
 
 // A flat template would score 1 against every flat area; it scores 0 instead.

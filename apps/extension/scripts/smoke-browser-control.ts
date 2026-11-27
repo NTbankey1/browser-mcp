@@ -1024,6 +1024,33 @@ get text #out`,
     );
   }
 
+  if (process.env.BROWSER_MCP_ENGINE !== "native") {
+    skipSection(
+      "test 26: image matching answers quickly",
+      "image matching is in the native engine (BROWSER_MCP_ENGINE=native)",
+    );
+  } else {
+    await section("test 26: image matching answers quickly", async () => {
+      await call(alpha, `goto ${fixtures.url("/canvas")}`);
+      const captured = await call(alpha, "screenshot #paint --path speed.jpg");
+      expect(!captured.isError, captured.text);
+      const times: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        const started = Date.now();
+        const result = await call(alpha, "find --image speed.jpg");
+        expect(!result.isError, result.text);
+        times.push(Date.now() - started);
+      }
+      times.sort((a, b) => a - b);
+      log(
+        `image matching: median ${times[2]} ms, max ${times[4]} ms (5 calls, screenshot included)`,
+      );
+      // Generous: the point is to catch a return to O(scene × template) work,
+      // not to police a loaded machine.
+      expect(times[4] < 3000, `the slowest find --image took ${times[4]} ms`);
+    });
+  }
+
   await section("a different daemon key asks again", async () => {
     await alpha.close();
     await beta.close();
