@@ -61,7 +61,9 @@ Status is what the code does today, not what a command's name suggests.
   what this machine actually runs (item 11).
 - Element finding by image, once visual assertions have a baseline story.
 
-11. **The suite does not switch engines.** `BROWSER_MCP_DAEMON=go` should make
-    the server start `bin/browsermcpd`; the browser suite still reported the
-    Node engine's messages. Until that is fixed, the Go engine is covered by
-    `go test ./...` rather than end to end.
+11. **The suite may not switch engines.** `BROWSER_MCP_DAEMON=go` should make the
+    server start `bin/browsermcpd`, but with it set the suite still saw no
+    `[no-element]` code, which `go test` proves the Go engine adds. Both engines
+    word a missed target the same way, so this needs a run with the daemons'
+    logs kept to settle it; meanwhile the Go engine is covered by `go test ./...`
+    plus the manual browser runs.
