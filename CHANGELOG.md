@@ -37,6 +37,11 @@ semantic versioning.
 - `BROWSER_MCP_CALL_BUDGET_MS`: a budget for a whole call, not just one step.
 - `BROWSER_MCP_TRACE_DIR`: one JSON line per call in `calls.jsonl` — commands,
   output, failure flag and duration — for replaying a failure.
+- `screenshot --expect <file>`: visual assertions. The first run writes the
+  baseline; a later run that differs fails with `[visual-diff]`.
+- `session save <file>` / `session restore <file>`: keep an AI app's tabs (URLs
+  and the current one) across calls. Restore opens them again and honours the
+  allowlist.
 
 ### Known
 
