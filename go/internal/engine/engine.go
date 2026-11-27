@@ -360,21 +360,25 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 	for _, line := range lines {
 		var printed, notes []string
 		stepCtx, cancel := context.WithTimeout(ctx, stepTimeout(line, e.stepLimit))
-		execute := func() error {
-			e.lockTab(stepCtx, session, tabLock)
+		execute := func(runCtx context.Context) error {
+			e.lockTab(runCtx, session, tabLock)
 			tabID := e.currentTab(session)
 			state := e.stateForID(tabID)
 			if state != nil && state.Dialog() != nil && !line.def.WhileDialog {
 				return stepErrorf("%s is open. Answer it with `dialog accept` or `dialog dismiss` first", state.Dialog().Label())
 			}
+			if confirmMode() && writeCommands[line.def.Name] {
+				notes = append(notes, "confirm: would run "+line.echo)
+				return nil
+			}
 			tracksURL := !line.def.Reads || line.def.Name == "eval"
 			before := ""
 			if tracksURL && tabID != 0 {
-				before, _ = e.quickURL(stepCtx, tabID)
+				before, _ = e.quickURL(runCtx, tabID)
 			}
 			step := &stepContext{engine: e, session: session, args: line.args, line: line,
 				printed: &printed, notes: &notes, images: &images}
-			if err := line.def.Run(stepCtx, step); err != nil {
+			if err := line.def.Run(runCtx, step); err != nil {
 				// A native dialog blocks the tab's CDP session until it is
 				// answered, which surfaces as a timeout: name the real cause.
 				if current := e.stateForID(e.currentTab(session)); current != nil && current.Dialog() != nil {
@@ -399,7 +403,7 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 				// Its own short deadline: if the step opened a dialog that the
 				// engine's event hasn't reported yet, this probe waits on a
 				// blocked session otherwise.
-				probeCtx, cancelProbe := context.WithTimeout(stepCtx, 2*time.Second)
+				probeCtx, cancelProbe := context.WithTimeout(runCtx, 2*time.Second)
 				after, probeErr := e.quickURL(probeCtx, tabID)
 				cancelProbe()
 				if probeErr != nil {
@@ -426,28 +430,43 @@ func (e *Engine) run(ctx context.Context, session *Session, lines []checkedLine,
 			}
 			return nil
 		}
-		err := execute()
-		// A read can be re-run safely when the debugger re-attached (a new
-		// Page, or the browser came back): the tab is fine. A step that acts
-		// isn't repeated, since it may have acted already.
-		for attempt := 0; err != nil && line.def.Reads && attempt < 3 && isReattachError(err); attempt++ {
+		err := execute(stepCtx)
+		// A read can be re-run safely: the tab is fine after a re-attach, and a
+		// timeout changed nothing. A write is retried only when it did not run
+		// at all — the target was not found, so nothing was clicked or typed.
+		for attempt := 0; err != nil && attempt < 3; attempt++ {
+			retry := false
+			switch {
+			case line.def.Reads && (isReattachError(err) || ErrorCode(err) == CodeTimeout):
+				retry = true
+			case !line.def.Reads && ErrorCode(err) == CodeNoElement:
+				retry = attempt == 0
+			}
+			if !retry {
+				break
+			}
 			tabID := e.currentTab(session)
 			if tabID == 0 || e.browsers.TabClosed(tabID) {
 				break
 			}
-			e.Released(tabID, "re-attached")
+			if isReattachError(err) {
+				e.Released(tabID, "re-attached")
+			}
 			select {
 			case <-time.After(150 * time.Millisecond):
 			case <-ctx.Done():
 			}
 			printed, notes = nil, nil
-			err = execute()
+			retryCtx, cancelRetry := context.WithTimeout(ctx, stepTimeout(line, e.stepLimit))
+			err = execute(retryCtx)
+			cancelRetry()
+			stepCtx = retryCtx
 		}
 		cancel()
 		if err != nil {
 			failed = true
 			pushPrinted(printed)
-			out = append(out, fmt.Sprintf("✗ step %d: %s — %s", line.line.Step, line.echo, ErrorMessage(err)))
+			out = append(out, fmt.Sprintf("✗ step %d: %s — %s", line.line.Step, line.echo, ErrorMessageWithCode(err)))
 			out = append(out, notRun(line.line.Step, len(lines))...)
 			break
 		}

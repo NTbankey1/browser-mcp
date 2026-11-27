@@ -29,6 +29,63 @@ func stepErrorf(format string, args ...any) error {
 	return &StepError{Message: fmt.Sprintf(format, args...)}
 }
 
+// Error codes: a stable word for the class of failure, so an agent can branch
+// on it instead of matching prose.
+const (
+	CodeNoElement    = "no-element"
+	CodeTimeout      = "timeout"
+	CodeHTTP         = "http"
+	CodeDialog       = "dialog-open"
+	CodeDisconnected = "disconnected"
+	CodeRefused      = "refused"
+)
+
+// classify picks the code for a message, or "" when it fits none.
+func classify(message string) string {
+	lower := strings.ToLower(message)
+	switch {
+	case strings.Contains(lower, "no element"), strings.Contains(lower, "waiting for locator"), strings.Contains(lower, "there's no "), strings.Contains(lower, "nothing matches"):
+		return CodeNoElement
+	case strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "timed out"), strings.Contains(lower, "timeout"), strings.Contains(lower, "didn't answer"):
+		return CodeTimeout
+	case strings.Contains(lower, "dialog") && strings.Contains(lower, "opened"):
+		return CodeDialog
+	case strings.Contains(lower, "disconnected"):
+		return CodeDisconnected
+	case strings.Contains(lower, "doesn't allow"), strings.Contains(lower, "isn't allowed"), strings.Contains(lower, "not allowed"):
+		return CodeRefused
+	case strings.HasPrefix(message, "HTTP "):
+		return CodeHTTP
+	}
+	return ""
+}
+
+// ErrorCode is the class of a failure, "" when it fits none.
+func ErrorCode(err error) string { return classify(ErrorMessage(err)) }
+
+// ErrorMessageWithCode prefixes the message with its code, for a step line.
+func ErrorMessageWithCode(err error) string {
+	message := ErrorMessage(err)
+	if code := classify(message); code != "" {
+		return "[" + code + "] " + message
+	}
+	return message
+}
+
+// redactHeader hides the value of a header that carries a credential.
+func redactHeader(line string) string {
+	colon := strings.Index(line, ":")
+	if colon < 0 {
+		return line
+	}
+	name := strings.ToLower(strings.TrimSpace(line[:colon]))
+	switch name {
+	case "authorization", "cookie", "set-cookie", "proxy-authorization", "x-api-key":
+		return line[:colon+1] + " [redacted]"
+	}
+	return line
+}
+
 // ErrorMessage turns an error into one line for the model, without call logs.
 func ErrorMessage(err error) string {
 	var step *StepError

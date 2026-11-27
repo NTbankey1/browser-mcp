@@ -56,13 +56,23 @@ properties: the command script never comes from the page, `get`/`find` return
 text only, and nothing in the engine can send a file anywhere (the only network
 call it makes is the anonymous download the user asked for).
 
-## Optional hardening not yet implemented
+## Optional controls (implemented, off by default)
 
-- A domain allowlist (`--allow-domain`) the engine enforces before navigating.
-- A confirmation step for sensitive actions (`click` on `Submit`, uploads).
-- Redaction of `Authorization` headers in `request`/`requests` output.
+- **Domain allowlist**: `BROWSER_MCP_ALLOW_DOMAINS=example.com,.test` makes `goto`
+  and `tab new` refuse any other host, subdomains included. A refused navigation
+  fails with `[refused]`.
+- **Confirmation mode**: `BROWSER_MCP_CONFIRM=1` turns the commands that change a
+  page — `click`, `fill`, `type`, `press`, `select`, `check`, `uncheck`,
+  `upload`, `drag`, `dialog` — into a `confirm: would run …` line, leaving the
+  page untouched, so a supervisor can approve one step at a time.
+- **Credential redaction**: `request` prints `Authorization`, `Cookie`,
+  `Set-Cookie`, `Proxy-Authorization` and `X-Api-Key` as `[redacted]`, so a
+  token is never copied into a transcript.
+- **Bounded failures**: every step has a deadline (30 s by default), so a page
+  that blocks a CDP call cannot hang a call for minutes.
 
-These are on the roadmap; see [roadmap.md](roadmap.md).
+Not yet: a per-script budget, an exportable trace, and visual assertions; see
+[roadmap.md](roadmap.md).
 
 ## Reporting
 

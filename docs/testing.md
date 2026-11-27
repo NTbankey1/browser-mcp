@@ -58,6 +58,17 @@ harness, not on the web". Last run (Wikipedia, Wikimedia):
 | `pdf` (15 pages)                                                                            | ✅                     |
 | `tab list`, `tab close`                                                                     | ✅                     |
 
+## Reliability and safety checks
+
+| Check                                                                                                                  | Where                       |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| A read is retried after a timeout or a re-attach                                                                       | `engine` unit tests + suite |
+| A write is retried once, and only on `no-element`                                                                      | test 15                     |
+| A failing step carries a class (`[no-element]`, `[timeout]`, `[http]`, `[dialog-open]`, `[disconnected]`, `[refused]`) | test 15                     |
+| `BROWSER_MCP_ALLOW_DOMAINS` refuses another host, allows subdomains                                                    | `policy_test.go`            |
+| `BROWSER_MCP_CONFIRM=1` reports a write instead of doing it                                                            | `policy_test.go`            |
+| Credential headers print as `[redacted]`                                                                               | `policy_test.go`            |
+
 ## What the tests found
 
 - **Uploads failed for everyone** (`ERR_FILE_NOT_FOUND`): the staged copies were
@@ -78,4 +89,10 @@ harness, not on the web". Last run (Wikipedia, Wikimedia):
   blocked command ends, or leave it for `dialog accept`/`dismiss`. The suite
   asserts the property that matters — the call returns, and the page ends in a
   resolved state.
-- No retry layer yet; see [roadmap.md](roadmap.md).
+- **Engine coverage**: the browser suite spawns the MCP server, which starts the
+  **Node** daemon unless `BROWSER_MCP_DAEMON=go` is set. Setting it in this
+  checkout still produced the Node engine's wording, so the suite is evidence
+  for the Node engine; the Go engine (the one this machine runs) is covered by
+  `go test ./...` — its unit tests plus the CDP integration suite.
+- No per-script budget, trace export, visual assertions or session snapshot yet;
+  see [roadmap.md](roadmap.md).
