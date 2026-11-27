@@ -270,6 +270,9 @@ func runGoto(ctx context.Context, c *stepContext) error {
 	if err != nil {
 		return err
 	}
+	if err := checkAllowed(raw); err != nil {
+		return err
+	}
 	mode := WaitLoad
 	if value, ok := c.args.Value("wait"); ok {
 		parsed, valid := ParseWaitMode(value)
@@ -913,6 +916,9 @@ func runTab(ctx context.Context, c *stepContext) error {
 			}
 		}
 		if url, ok := c.args.Arg(1); ok {
+			if err := checkAllowed(url); err != nil {
+				return err
+			}
 			state, err := c.tabState(ctx)
 			if err != nil {
 				return err
@@ -1486,13 +1492,13 @@ func runRequest(ctx context.Context, c *stepContext) error {
 		lines = append(lines, fmt.Sprintf("status %d", entry.Status))
 	}
 	for _, header := range headerLines(entry.Headers) {
-		lines = append(lines, "> "+header)
+		lines = append(lines, "> "+redactHeader(header))
 	}
 	if entry.PostData != "" {
 		lines = append(lines, "", entry.PostData)
 	}
 	for _, header := range headerLines(entry.RespHead) {
-		lines = append(lines, "< "+header)
+		lines = append(lines, "< "+redactHeader(header))
 	}
 	if entry.Failure != "" {
 		lines = append(lines, "failed: "+entry.Failure)

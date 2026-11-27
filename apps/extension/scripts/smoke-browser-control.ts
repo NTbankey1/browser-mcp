@@ -763,6 +763,11 @@ get text #out`,
       ),
       result.text,
     );
+    // The Go engine names the class of the failure, so an agent can branch on
+    // it; the Node engine still reports the message alone.
+    if (process.env.BROWSER_MCP_DAEMON === "go") {
+      expect(/\[no-element\]|\[timeout\]/.test(result.text), result.text);
+    }
   });
 
   await section(

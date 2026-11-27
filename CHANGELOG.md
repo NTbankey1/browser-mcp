@@ -24,6 +24,22 @@ semantic versioning.
 
 ### Added
 
+- Safe retries: a read re-runs after a re-attach or a timeout, and a write
+  retries once — only when the error is `no-element`, so nothing was clicked or
+  typed twice.
+- Structured errors: every failed step names its class (`[no-element]`,
+  `[timeout]`, `[http]`, `[dialog-open]`, `[disconnected]`, `[refused]`).
+- `BROWSER_MCP_ALLOW_DOMAINS`: an opt-in allowlist for `goto` and `tab new`.
+- `BROWSER_MCP_CONFIRM=1`: opt-in confirmation mode, where the commands that
+  change a page report what they would do instead of doing it.
+- `request` redacts `Authorization`, `Cookie`, `Set-Cookie`,
+  `Proxy-Authorization` and `X-Api-Key`.
+
+### Known
+
+- The browser suite drives the Node engine; `BROWSER_MCP_DAEMON=go` did not
+  switch it in this checkout, so the Go engine is covered by `go test ./...`.
+
 - `PRODUCT_NAME` in `@browsermcp/protocol` and `brand.Name` in the Go daemon:
   the product's name has one source per side, and every message, the MCP
   server's name and the on-page cursor label read it.
