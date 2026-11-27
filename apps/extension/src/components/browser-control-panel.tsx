@@ -60,7 +60,7 @@ export function BrowserControlPanel() {
         >
           <h2
             id="browser-control-apps"
-            className="text-xs font-medium text-muted-foreground"
+            className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
           >
             AI apps
           </h2>
@@ -74,7 +74,7 @@ export function BrowserControlPanel() {
                 <li key={app.id}>
                   {/* The app's tab group as Chrome draws it: its name on its color, and a line in that color by its tabs */}
                   <span
-                    className="inline-block max-w-full truncate rounded-md px-1.5 py-px text-xs font-medium"
+                    className="inline-block max-w-full truncate rounded-full px-2 py-px text-xs font-medium"
                     style={{
                       backgroundColor: TAB_GROUP_HEX[app.color],
                       color: TAB_GROUP_TEXT[app.color],

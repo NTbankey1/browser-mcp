@@ -7,6 +7,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { fileURLToPath } from "node:url";
 
+import { PRODUCT_NAME } from "@browsermcp/protocol";
+
 import { INSTRUCTIONS } from "@/commands/instructions";
 import type { Capability } from "@/contracts";
 import { browserMcpHome } from "@/daemon/paths";
@@ -32,7 +34,7 @@ export type ThinOptions = {
 export function createThinServer(options: ThinOptions) {
   const log = options.log ?? debugLog;
   const server = new Server(
-    { name: "Browser MCP", version: options.version ?? VERSION },
+    { name: PRODUCT_NAME, version: options.version ?? VERSION },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 
@@ -95,7 +97,7 @@ export function createThinServer(options: ThinOptions) {
               type: "text",
               text:
                 message === "Connection closed"
-                  ? "The Browser MCP daemon stopped while handling this call. Run it again: a new daemon starts, and the browser reconnects within seconds"
+                  ? `The ${PRODUCT_NAME} daemon stopped while handling this call. Run it again: a new daemon starts, and the browser reconnects within seconds`
                   : message,
             },
           ],

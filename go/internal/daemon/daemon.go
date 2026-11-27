@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/browser"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/client"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/config"
@@ -29,7 +30,7 @@ import (
 
 // ErrAlreadyRunning means another daemon holds the port (the thin process
 // should use it). The front door exits successfully in that case.
-var ErrAlreadyRunning = errors.New("another Browser MCP daemon is already listening")
+var ErrAlreadyRunning = errors.New("another " + brand.Name + " daemon is already listening")
 
 // Daemon is a running front door.
 type Daemon struct {

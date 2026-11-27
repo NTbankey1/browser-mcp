@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@browsermcp/protocol";
 import { type Browser, browser } from "wxt/browser";
 
 import {
@@ -55,7 +56,7 @@ import {
 
 /** What every command answers while the user has pressed **Stop** */
 export const PAUSED_MESSAGE =
-  "The user paused Browser MCP. Ask them to click Resume in its popup";
+  `The user paused ${PRODUCT_NAME}. Ask them to click Resume in its popup`;
 
 export const WATCHDOG_ALARM = "browser-control-watchdog";
 
@@ -696,7 +697,7 @@ export class BrowserControl {
   async allow(publicKey: string): Promise<void> {
     const daemon = this.#daemon;
     if (!daemon || daemon.publicKey !== publicKey) {
-      throw new Error("This Browser MCP server is no longer connected");
+      throw new Error(`This ${PRODUCT_NAME} server is no longer connected`);
     }
     await addPairedKey(publicKey);
     daemon.paired = true;

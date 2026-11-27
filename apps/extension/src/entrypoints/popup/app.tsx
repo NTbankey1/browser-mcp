@@ -25,7 +25,8 @@ export function App() {
 
   return (
     // The panel's status and footer run edge to edge, so each part pads itself
-    <div className="w-80 text-[13px]">
+    <div className="w-80 bg-background text-[13px]">
+      <div className="brand-edge h-px w-full" aria-hidden />
       <PopupHeader onOpenSettings={() => setSettingsOpen(true)} />
       <BrowserControlPanel />
     </div>

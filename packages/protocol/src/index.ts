@@ -16,6 +16,12 @@
  */
 import type { Protocol } from "devtools-protocol/types/protocol";
 
+/**
+ * The product's name as users and agents see it: the popup, the pairing prompt,
+ * the messages the tool returns. White-labelled builds change it here.
+ */
+export const PRODUCT_NAME = "Browser MCP";
+
 /** Bumped on breaking changes. Each side states the versions it supports, so later releases can stay compatible */
 export const RELAY_PROTOCOL_VERSION = 1;
 
@@ -37,7 +43,7 @@ export function isValidRelayPort(port: number): boolean {
 
 /** What the extension answers every 0.1.x server command with, so the agent tells the user why the browser stopped working */
 export const LEGACY_SERVER_MESSAGE =
-  "Browser MCP's extension is now 2.0. Update the MCP server: use @browsermcp/mcp@latest in your AI app's MCP config and restart the app";
+  `${PRODUCT_NAME}'s extension is now 2.0. Update the MCP server: use @browsermcp/mcp@latest in your AI app's MCP config and restart the app`;
 
 // --- Pairing ---
 
@@ -97,7 +103,7 @@ export async function pairingCode(
 
 /** What requests answer while the extension waits for **Allow**: without a code until the extension's nonce arrived (a moment after it connects) */
 export function pairingRequiredMessage(code?: string): string {
-  const message = "Click Allow in the Browser MCP extension's popup";
+  const message = `Click Allow in the ${PRODUCT_NAME} extension's popup`;
   return code ? `${message}. The code is ${code}` : message;
 }
 
@@ -120,7 +126,7 @@ function fromBase64(base64: string): Uint8Array<ArrayBuffer> {
 
 /** What tool calls answer while no 2.0 extension is connected (none, or a 1.x one, which only dials 9009) */
 export const NO_EXTENSION_MESSAGE =
-  "No browser is connected. Install the Browser MCP extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update";
+  `No browser is connected. Install the ${PRODUCT_NAME} extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update`;
 
 /** How many browsers (profiles) a daemon connects at once. One more is refused with `RelayCloseCode.anotherBrowser` */
 export const MAX_BROWSERS = 8;

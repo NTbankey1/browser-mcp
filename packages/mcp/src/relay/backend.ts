@@ -171,7 +171,7 @@ export class RelayBackend implements BrowserBackend {
           );
           connection.close(
             RelayCloseCode.anotherBrowser,
-            "This browser is connected to Browser MCP already",
+            "This browser is connected to ${PRODUCT_NAME} already",
           );
           return;
         }
@@ -350,7 +350,7 @@ export class RelayBackend implements BrowserBackend {
     this.disconnected(slot, connection);
     connection.close(
       RelayCloseCode.anotherBrowser,
-      "This browser connected to Browser MCP again",
+      "This browser connected to ${PRODUCT_NAME} again",
     );
   }
 

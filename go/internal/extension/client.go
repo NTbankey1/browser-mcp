@@ -16,13 +16,14 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/extproto"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/pairing"
 )
 
 // Errors callers branch on.
 var (
-	ErrClosed      = errors.New("the browser disconnected from Browser MCP")
+	ErrClosed      = errors.New("the browser disconnected from " + brand.Name)
 	ErrNotPaired   = errors.New("the extension is waiting for Allow")
 	ErrUnavailable = errors.New("the browser didn't answer in time")
 )

@@ -73,11 +73,61 @@ Page: ${u("/dialogs")} — "Dialogs"`);
   it("reports unknown commands and flags", async () => {
     const s = session();
     expect(await h.run(s, "frobnicate")).toMatch(
-      /^✗ step 1: frobnicate — Unknown command frobnicate\. Commands: goto,/,
+      /^✗ step 1: frobnicate — Unknown command frobnicate\. Run `help` to list the commands/,
     );
     expect(await h.run(s, "help click\nsnapshot --bogus")).toContain(
       "✗ step 2: snapshot --bogus — snapshot has no --bogus flag. Run `help snapshot`",
     );
+  });
+
+  it("suggests the command a bare word or a typo meant", async () => {
+    const s = session();
+    expect(await h.run(s, "list")).toMatch(
+      /^✗ step 1: list — Unknown command list\. Did you mean `tab list` or `browser list`\?/,
+    );
+    expect(await h.run(s, "clik e1")).toContain("Did you mean `click`?");
+    expect(await h.run(s, "help nope")).toContain(
+      "No command nope. Run `help` to list the commands",
+    );
+  });
+
+  it("names the argument when a call sends it under another key", async () => {
+    const s = session();
+    const result = await h.engine.callTool(s, "browser", { command: "help" });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("takes one argument, `command`");
+    expect(text).toContain("Did you mean `commands`?");
+    const array = await h.engine.callTool(s, "browser", {
+      commands: ["help click"],
+    });
+    const arrayText = (array.content[0] as { text: string }).text;
+    expect(arrayText).toContain("click <target>");
+  });
+
+  it("says what the page shows when a wait times out", async () => {
+    const s = session();
+    await h.run(s, `goto ${u("/misc")}`);
+    const { text, isError } = await h.call(
+      s,
+      `wait --text "Message ChatGPT" --timeout 300`,
+    );
+    expect(isError).toBe(true);
+    expect(text).toContain(
+      'Timed out after 300 ms waiting for the text "Message ChatGPT"',
+    );
+    expect(text).toContain("the page shows");
+    expect(text).toContain("Misc");
+  });
+
+  it("says when a waited-for text is only a placeholder", async () => {
+    const s = session();
+    await h.run(s, `goto ${u("/misc")}`);
+    const { text, isError } = await h.call(
+      s,
+      `wait --text "Search here" --timeout 300`,
+    );
+    expect(isError).toBe(true);
+    expect(text).toContain("in the page's HTML but not in its visible text");
   });
 
   it("runs none of a call's steps when any line is invalid, listing every bad line", async () => {

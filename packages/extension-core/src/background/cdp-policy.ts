@@ -35,11 +35,13 @@ const DENIED_DOMAINS = new Set([
   "DOMStorage",
 ]);
 
+import { PRODUCT_NAME } from "@browsermcp/protocol";
+
 /** Why the extension refuses this CDP command, or `null` when it relays it */
 export function getDeniedCdpMessage(method: string): string | null {
   const domain = method.split(".")[0];
   if (DENIED_METHODS.has(method) || DENIED_DOMAINS.has(domain)) {
-    return `Browser MCP doesn't allow ${method}: it reaches other sites or tabs`;
+    return `${PRODUCT_NAME} doesn't allow ${method}: it reaches other sites or tabs`;
   }
   return null;
 }

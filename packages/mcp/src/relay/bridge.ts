@@ -215,7 +215,7 @@ export class CdpBridge {
     // Another browser replaced this one meanwhile: its tab with this ID is another tab
     if (this.options.extension() !== extension) {
       throw new Error(
-        "The browser disconnected from Browser MCP while handling the command",
+        "The browser disconnected from ${PRODUCT_NAME} while handling the command",
       );
     }
     const existing = this.targets.get(tabId);

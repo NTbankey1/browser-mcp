@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/NTbankey1/browser-mcp/go-daemon/internal/brand"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/cdp"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/extension"
 	"github.com/NTbankey1/browser-mcp/go-daemon/internal/extproto"
@@ -23,14 +24,14 @@ import (
 
 // Messages the model sees when no browser is usable.
 const (
-	NoExtensionMessage = "No browser is connected. Install the Browser MCP extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update"
-	PausedMessage      = "The user paused Browser MCP. Ask them to click Resume in its popup"
+	NoExtensionMessage = "No browser is connected. Install the " + brand.Name + " extension, or update it to 2.0: open chrome://extensions, turn on Developer mode and click Update"
+	PausedMessage      = "The user paused " + brand.Name + ". Ask them to click Resume in its popup"
 )
 
 // PairingRequiredMessage is what requests answer while the extension waits
 // for Allow, optionally naming the code.
 func PairingRequiredMessage(code string) string {
-	message := "Click Allow in the Browser MCP extension's popup"
+	message := "Click Allow in the " + brand.Name + " extension's popup"
 	if code != "" {
 		return message + ". The code is " + code
 	}
@@ -235,7 +236,7 @@ func (r *Registry) AcceptExtension(ctx context.Context, ws *websocket.Conn, opti
 }
 
 func tooManyBrowsersReason(max int) string {
-	return fmt.Sprintf("Browser MCP is connected to %d browsers already", max)
+	return fmt.Sprintf("%s is connected to %d browsers already", brand.Name, max)
 }
 
 func (r *Registry) assign(client *extension.Client) (*Browser, error) {
@@ -894,7 +895,7 @@ func (r *Registry) browserOfTab(tabID int) (*Browser, int, error) {
 	// A tab of a browser that is away fails with its label
 	for _, browser := range browsers {
 		if !browser.Connected() {
-			return nil, 0, fmt.Errorf("%s disconnected from Browser MCP. It reconnects by itself while it's open; meanwhile use a tab of another browser (`tab list`, `browser list`)", browser.Label())
+			return nil, 0, fmt.Errorf("%s disconnected from %s. It reconnects by itself while it's open; meanwhile use a tab of another browser (`tab list`, `browser list`)", browser.Label(), brand.Name)
 		}
 	}
 	return nil, 0, fmt.Errorf("There's no tab %d. Run `tab list`", tabID)
@@ -929,7 +930,7 @@ func (r *Registry) connOf(browser *Browser) (*extension.Client, error) {
 	conn := browser.conn
 	browser.mu.Unlock()
 	if conn == nil || !conn.Open() {
-		return nil, fmt.Errorf("%s disconnected from Browser MCP. It reconnects by itself while it's open", browser.Label())
+		return nil, fmt.Errorf("%s disconnected from %s. It reconnects by itself while it's open", browser.Label(), brand.Name)
 	}
 	return conn, nil
 }

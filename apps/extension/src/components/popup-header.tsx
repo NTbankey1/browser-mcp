@@ -13,7 +13,9 @@ export function PopupHeader({
   return (
     <div className="flex items-center justify-between gap-2 px-4 py-2.5">
       <div className="flex items-center gap-2">
-        <img src={logo} alt="" width={30} height={30} />
+        <span className="brand-tile grid size-8 place-items-center rounded-[10px]">
+          <img src={logo} alt="" width={22} height={22} />
+        </span>
         <span className="text-[15px] font-semibold tracking-[-0.02em]">
           {APP_NAME}
         </span>

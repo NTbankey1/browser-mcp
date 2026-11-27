@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import WebSocket from "ws";
 
-import { RelayPaths, type RelayStatus } from "@browsermcp/protocol";
+import { PRODUCT_NAME, RelayPaths, type RelayStatus } from "@browsermcp/protocol";
 
 import {
   type Capability,
@@ -98,7 +98,7 @@ export class DaemonClient {
       }
       if (compareVersions(this.options.version, found.status.version) > 0) {
         log(
-          `Replacing the Browser MCP daemon ${found.status.version} with ${this.options.version}`,
+          `Replacing the ${PRODUCT_NAME} daemon ${found.status.version} with ${this.options.version}`,
         );
         await this.replace(found.info);
         continue;
@@ -108,11 +108,11 @@ export class DaemonClient {
         return this.peer;
       } catch (error) {
         lastError = error;
-        log("Couldn't connect to the Browser MCP daemon:", error);
+        log("Couldn't connect to the ${PRODUCT_NAME} daemon:", error);
       }
     }
     throw new Error(
-      `Couldn't start the Browser MCP daemon (see ${this.options.home}/daemon.log)${lastError ? `: ${String(lastError)}` : ""}`,
+      `Couldn't start the ${PRODUCT_NAME} daemon (see ${this.options.home}/daemon.log)${lastError ? `: ${String(lastError)}` : ""}`,
     );
   }
 
@@ -144,7 +144,7 @@ export class DaemonClient {
       return false;
     }
     this.options.log(
-      `A newer Browser MCP daemon (${starting.version}) is starting; waiting for it`,
+      `A newer ${PRODUCT_NAME} daemon (${starting.version}) is starting; waiting for it`,
     );
     while (Date.now() < until) {
       if (await this.findDaemon()) {
@@ -161,7 +161,7 @@ export class DaemonClient {
     if (this.options.port) {
       args.push("--port", String(this.options.port));
     }
-    this.options.log("Starting the Browser MCP daemon");
+    this.options.log("Starting the ${PRODUCT_NAME} daemon");
     this.markStarting();
     const child = spawn(command!, args, {
       detached: true,
@@ -182,7 +182,7 @@ export class DaemonClient {
       this.unmarkStarting();
     }
     throw new Error(
-      `The Browser MCP daemon didn't start (see ${this.options.home}/daemon.log)`,
+      `The ${PRODUCT_NAME} daemon didn't start (see ${this.options.home}/daemon.log)`,
     );
   }
 
@@ -290,11 +290,11 @@ export class DaemonClient {
         clearTimeout(timeout);
         ws.removeAllListeners();
         ws.on("close", () => {
-          this.options.log("Disconnected from the Browser MCP daemon");
+          this.options.log("Disconnected from the ${PRODUCT_NAME} daemon");
         });
         ws.on("error", () => {});
         this.options.log(
-          `Connected to the Browser MCP daemon ${welcome.version} on port ${info.port}`,
+          `Connected to the ${PRODUCT_NAME} daemon ${welcome.version} on port ${info.port}`,
         );
         resolve(new RpcPeer(ws, this.options.files));
       });
