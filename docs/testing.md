@@ -47,20 +47,23 @@ line; screenshots, daemon logs and `results.json` land in
 ## 2. The real-browser checklist (manual, on the user's own Chrome)
 
 Run against live sites, not fixtures — this is what catches "works in the
-harness, not on the web". Last run (Wikipedia, Wikimedia):
+harness, not on the web". Last run (Wikipedia, Wikimedia, and a local canvas page):
 
-| Step                                                                                        | Result                                                                       |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Open a page and read its title                                                              | ✅                                                                           |
-| `snapshot -i`, open a collapsed search box, `fill`, pick a suggestion                       | ✅                                                                           |
-| `get text` of the article (38 255 characters)                                               | ✅                                                                           |
-| `find` a link, `eval` a paragraph and an image URL                                          | ✅                                                                           |
-| `download` an image from another origin (`thumb.wikimedia.org` while on `en.wikipedia.org`) | ✅ 33.8 KB, valid PNG                                                        |
-| `screenshot`                                                                                | ✅                                                                           |
-| `requests --filter`, `console --errors`                                                     | ✅ (no console errors)                                                       |
-| `pdf` (15 pages)                                                                            | ✅                                                                           |
-| `screenshot img[alt='Wikipedia'] --path …`, then `find --image`, `click --image`            | ✅ score 1.00 on the wordmark's `<img>`; the click reached `/wiki/Main_Page` |
-| `tab list`, `tab close`                                                                     | ✅                                                                           |
+| Step                                                                                        | Result                                                                                                               |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Open a page and read its title                                                              | ✅                                                                                                                   |
+| `snapshot -i`, open a collapsed search box, `fill`, pick a suggestion                       | ✅                                                                                                                   |
+| `get text` of the article (38 255 characters)                                               | ✅                                                                                                                   |
+| `find` a link, `eval` a paragraph and an image URL                                          | ✅                                                                                                                   |
+| `download` an image from another origin (`thumb.wikimedia.org` while on `en.wikipedia.org`) | ✅ 33.8 KB, valid PNG                                                                                                |
+| `screenshot`                                                                                | ✅                                                                                                                   |
+| `requests --filter`, `console --errors`                                                     | ✅ (no console errors)                                                                                               |
+| `pdf` (15 pages)                                                                            | ✅                                                                                                                   |
+| `screenshot img[alt='Wikipedia'] --path …`, then `find --image`, `click --image`            | ✅ score 1.00 on the wordmark's `<img>`; `--in "locator('header').first()"` too; the click reached `/wiki/Main_Page` |
+| A canvas page in the real browser: `find`/`click --image` on an icon-only control           | ✅ score 1.00, `<canvas#paint>`, clicked at 160,110                                                                  |
+| The same icon twice: `[image-ambiguous]`, then `--nth 1` and `--in "#right"`                | ✅ `--nth 1` → left (`twin 0`), `--in "#right"` → right (`twin 1`)                                                   |
+| A template from another page: `find --image`                                                | ✅ `[image-not-found]`, best 0.58 under the 0.90 threshold                                                           |
+| `tab list`, `tab close`                                                                     | ✅                                                                                                                   |
 
 ## Reliability and safety checks
 
