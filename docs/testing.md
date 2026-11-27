@@ -14,7 +14,8 @@ drives the `browser` tool over stdio as an AI app does. Every check prints one
 line; screenshots, daemon logs and `results.json` land in
 `apps/extension/.output/smoke/`.
 
-**Last run: 32/32 passed.**
+**Last run: 32/32 passed** — the default Node engine, and again with
+`BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native` on the native Go engine.
 
 | ID    | Check                                                                            | Evidence                                                              |
 | ----- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -89,12 +90,10 @@ harness, not on the web". Last run (Wikipedia, Wikimedia):
   blocked command ends, or leave it for `dialog accept`/`dismiss`. The suite
   asserts the property that matters — the call returns, and the page ends in a
   resolved state.
-- **Engine coverage, unresolved**: the browser suite spawns the MCP server, which
-  starts the **Node** daemon unless `BROWSER_MCP_DAEMON=go` is set. With that
-  variable set, test 15 still saw no `[no-element]` code, while `go test` proves
-  the Go engine adds it. Both engines word a missed target identically, so the
-  cause is not yet known — the suite may be running the Node daemon or an older
-  binary. Until it is settled, the Go engine's evidence is `go test ./...`
-  (unit + the CDP integration suite) plus the manual runs recorded below.
-- No per-script budget, trace export, visual assertions or session snapshot yet;
-  see [roadmap.md](roadmap.md).
+- **Engine coverage**: the suite runs the Node engine by default.
+  `BROWSER_MCP_DAEMON=go` runs the Go daemon, but that daemon hands calls to the
+  Node engine; `BROWSER_MCP_ENGINE=native` runs the Go engine itself. The full
+  suite passes 32/32 on both, and the daemon log says `native engine enabled`
+  when the Go engine is the one answering. Test 15's error-class assertion only
+  applies with the native engine, because the Node engine reports the message
+  without the class.

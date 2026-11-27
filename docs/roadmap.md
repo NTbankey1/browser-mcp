@@ -52,18 +52,17 @@ Status is what the code does today, not what a command's name suggests.
 
 ## Still open
 
-11. **The suite does not switch engines** (see below), and nothing yet finds an
-    element by image or restores cookies (the latter by design).
+11. **Element finding by image**, once visual assertions have a baseline story.
+    Restoring cookies stays refused by design (see [security.md](security.md)).
 
 ## Order for the next pass
 
-- Make the browser suite drive the Go engine, so the end-to-end evidence covers
-  what this machine actually runs (item 11).
-- Element finding by image, once visual assertions have a baseline story.
+- Element finding by image.
 
-11. **The suite may not switch engines.** `BROWSER_MCP_DAEMON=go` should make the
-    server start `bin/browsermcpd`, but with it set the suite still saw no
-    `[no-element]` code, which `go test` proves the Go engine adds. Both engines
-    word a missed target the same way, so this needs a run with the daemons'
-    logs kept to settle it; meanwhile the Go engine is covered by `go test ./...`
-    plus the manual browser runs.
+## Settled: the suite switches engines
+
+`BROWSER_MCP_DAEMON=go` alone runs the **Go front door**, which hands calls to
+the Node engine, so test 15's error-class check saw no `[no-element]`. With
+`BROWSER_MCP_ENGINE=native` as well, the suite runs the native Go engine and
+passes 32/32; the daemon log says `native engine enabled`. The test now asserts
+the error class only under the native engine. See [testing.md](testing.md).
