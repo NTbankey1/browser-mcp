@@ -802,7 +802,7 @@ export const COMMANDS: CommandDef[] = [
     name: "wait",
     usage:
       'wait <ms> | wait --text "<text>" | wait --gone "<text>" | wait --url <glob> | wait <target>',
-    help: "Waits a number of ms (up to 60000), or until text appears or disappears, the URL matches (a glob with * and **, or a substring), or the target is visible. Times out after 10 s; change it with --timeout <ms>.",
+    help: "Waits a number of ms (up to 60000), or until text appears or disappears, the URL matches (a glob with * and **, or a substring), or the target is visible. Times out after 10 s; change it with --timeout <ms>. --text matches the page's visible text: a placeholder or an attribute needs a target instead. A timeout reports the page's URL, ready state and visible text.",
     flags: { text: true, gone: true, url: true, timeout: true },
     noPage: true,
     maxArgs: 1,
@@ -820,28 +820,50 @@ export const COMMANDS: CommandDef[] = [
       }
       const page = await ctx.page();
       const timeout = timeoutFlag(ctx.args);
+      const startUrl = page.url();
       let check: () => Promise<boolean>;
       let what: string;
+      /** What the timeout says about the page: the same two failures look alike, a text that isn't there and a text that is (in another case, or in an attribute such as a placeholder) */
+      let describe: (base: string) => Promise<string> = async (base) => base;
       if (typeof flags.text === "string") {
-        const locator = page.getByText(flags.text);
+        const text = flags.text;
+        const locator = page.getByText(text);
         check = () =>
           locator
             .filter({ visible: true })
             .count()
             .then((n) => n > 0);
-        what = `the text ${JSON.stringify(flags.text)}`;
+        what = `the text ${JSON.stringify(text)}`;
+        describe = async (base) => {
+          const probe = await probeText(page, text);
+          const hints: string[] = [];
+          if (probe?.caseFold && !probe.found) {
+            hints.push("it is on the page, in a different case");
+          }
+          if (probe?.inHtml && !probe.found) {
+            hints.push(
+              "it is in the page's HTML but not in its visible text: a placeholder, an attribute, or hidden",
+            );
+          }
+          return waitFailure(base, probe, startUrl, hints);
+        };
       } else if (typeof flags.gone === "string") {
-        const locator = page.getByText(flags.gone);
+        const text = flags.gone;
+        const locator = page.getByText(text);
         check = () =>
           locator
             .filter({ visible: true })
             .count()
             .then((n) => n === 0);
-        what = `${JSON.stringify(flags.gone)} to go away`;
+        what = `${JSON.stringify(text)} to go away`;
+        describe = async (base) =>
+          waitFailure(base, await probeText(page, text), startUrl);
       } else if (typeof flags.url === "string") {
         const matches = urlMatcher(flags.url);
         check = async () => matches(page.url());
         what = `a URL matching ${flags.url}`;
+        describe = async (base) =>
+          waitFailure(base, await readPageState(page), startUrl);
       } else if (first) {
         const t = parseTarget(first.text);
         const locator = toLocator(page, t);
@@ -851,6 +873,8 @@ export const COMMANDS: CommandDef[] = [
             .count()
             .then((n) => n > 0);
         what = t.source;
+        describe = async (base) =>
+          waitFailure(base, await readPageState(page), startUrl);
       } else {
         throw new StepError(
           "wait takes <ms>, --text, --gone, --url or a <target>",
@@ -866,7 +890,7 @@ export const COMMANDS: CommandDef[] = [
       while (!(await checkInTime())) {
         if (Date.now() >= deadline) {
           throw new StepError(
-            `Timed out after ${timeout} ms waiting for ${what}`,
+            await describe(`Timed out after ${timeout} ms waiting for ${what}`),
           );
         }
         await sleep(100);
@@ -1315,7 +1339,9 @@ COMMANDS.push({
       return;
     }
     const command = COMMANDS.find((item) => item.name === name);
-    if (!command) throw new StepError(`No command ${name}. Run \`help\``);
+    if (!command) {
+      throw new StepError(`No command ${name}. ${unknownCommandHint(name)}`);
+    }
     const flags = command.capability
       ? `\nNeeds --caps ${command.capability}.`
       : "";
@@ -1339,3 +1365,147 @@ export function availableCommands(
 export const COMMANDS_BY_NAME = new Map(
   COMMANDS.map((command) => [command.name, command]),
 );
+
+/** What a mistyped command likely meant: a word of a multi-word command (`list` is `tab list` and `browser list`), a prefix (`snap` is `snapshot`), or a name one or two edits away (`clik` is `click`) */
+export function commandSuggestions(name: string): string[] {
+  const lower = name.trim().toLowerCase();
+  if (!lower) return [];
+  const suggestions: string[] = [];
+  const add = (candidate: string) => {
+    if (candidate && candidate !== lower && !suggestions.includes(candidate)) {
+      suggestions.push(candidate);
+    }
+  };
+  for (const command of COMMANDS) {
+    for (const alternative of command.usage.split("|")) {
+      const words = alternative
+        .split("#")[0]
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      const index = words.findIndex(
+        (word, i) => i > 0 && word.toLowerCase() === lower,
+      );
+      if (index > 0) add(words.slice(0, index + 1).join(" "));
+    }
+  }
+  if (lower.length >= 3) {
+    for (const command of COMMANDS) {
+      if (command.name.startsWith(lower)) add(command.name);
+    }
+  }
+  // Names that share the first letter only: `nope` is two edits from `type`
+  // but means nothing, and a suggestion that wrong is worse than none
+  let best = 3;
+  let nearest: string[] = [];
+  for (const command of COMMANDS) {
+    if (command.name[0] !== lower[0]) continue;
+    const distance = editDistance(lower, command.name);
+    if (distance < best) {
+      best = distance;
+      nearest = [command.name];
+    } else if (distance === best) {
+      nearest.push(command.name);
+    }
+  }
+  // Two edits are a typo in a long word (`clcik`), not in a short one
+  if (best === 1 || (best === 2 && lower.length >= 5)) nearest.forEach(add);
+  return suggestions.slice(0, 3);
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + cost,
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+function quotedList(values: string[]): string {
+  const quoted = values.map((value) => `\`${value}\``);
+  if (quoted.length <= 1) return quoted.join("");
+  return `${quoted.slice(0, -1).join(", ")} or ${quoted.at(-1)}`;
+}
+
+/** How a mistyped command is answered: what it likely meant, then where every command is */
+export function unknownCommandHint(name: string): string {
+  const suggestions = commandSuggestions(name);
+  return suggestions.length
+    ? `Did you mean ${quotedList(suggestions)}? Run \`help\` to list the commands`
+    : "Run `help` to list the commands";
+}
+
+/** What a timed-out wait needs to tell a slow page from a wrong target: where the page is, whether it finished loading, and what it shows */
+type PageState = { readyState: string; url: string; sample: string };
+
+/** One look at a page for `wait --text` or `wait --gone`: whether the text is in its visible text, in another case, only in its HTML, and the page state a timeout reports */
+type TextProbe = PageState & {
+  found: boolean;
+  caseFold: boolean;
+  inHtml: boolean;
+};
+
+async function probeText(page: Page, text: string): Promise<TextProbe | null> {
+  try {
+    return await page.evaluate((needle) => {
+      const bodyText = document.body?.innerText ?? "";
+      const html = document.documentElement?.outerHTML ?? "";
+      return {
+        found: bodyText.includes(needle),
+        caseFold: bodyText.toLowerCase().includes(needle.toLowerCase()),
+        inHtml: html.includes(needle),
+        readyState: document.readyState,
+        url: location.href,
+        sample: bodyText.replace(/\s+/g, " ").trim().slice(0, 160),
+      };
+    }, text);
+  } catch {
+    return null;
+  }
+}
+
+async function readPageState(page: Page): Promise<PageState | null> {
+  try {
+    return await page.evaluate(() => ({
+      readyState: document.readyState,
+      url: location.href,
+      sample: (document.body?.innerText ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** A wait's timeout message: the page's own state, so the model can tell a wrong string from a slow load or a navigation without a second call to look */
+function waitFailure(
+  base: string,
+  state: PageState | null,
+  startUrl: string,
+  hints: string[] = [],
+): string {
+  const details = [...hints];
+  if (state?.url && startUrl && state.url !== startUrl) {
+    details.push(`the page navigated to ${state.url} meanwhile`);
+  }
+  if (state?.readyState && state.readyState !== "complete") {
+    details.push(`the page was still loading (readyState ${state.readyState})`);
+  }
+  if (state?.sample) {
+    details.push(`the page shows ${JSON.stringify(state.sample)}`);
+  } else if (state?.readyState === "complete") {
+    details.push("the page has no visible text");
+  }
+  return details.length ? `${base}; ${details.join("; ")}` : base;
+}
