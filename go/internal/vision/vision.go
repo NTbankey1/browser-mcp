@@ -318,6 +318,12 @@ var DefaultScales = []float64{1, 1.25, 1.5, 2, 0.8, 2.0 / 3, 0.5}
 // candidatesPerScale is how many coarse positions are refined at full resolution.
 const candidatesPerScale = 8
 
+// coarseKeep is how many sampled positions survive the coarse pass to be
+// refined at their own level. More than candidatesPerScale because a sample a
+// pixel off the true peak can score well below it, and overlaps are dropped
+// only after refinement.
+const coarseKeep = 64
+
 // Search looks for the template in the scene and returns up to
 // options.MaxMatches matches, best first. It does not apply a threshold: the
 // caller decides what counts as a match, and a score below it is still useful
@@ -334,7 +340,15 @@ func Search(scene *Image, template *Template, options Options) []Match {
 	if len(scales) == 0 {
 		scales = DefaultScales
 	}
-	coarseScenes := map[int]*Image{}
+	levels := map[int]*Image{}
+	level := func(factor int) *Image {
+		if cached, ok := levels[factor]; ok {
+			return cached
+		}
+		downsampled := scene.downsampled(factor)
+		levels[factor] = downsampled
+		return downsampled
+	}
 	var found []Match
 	for _, scale := range scales {
 		if scale <= 0 {
@@ -347,13 +361,8 @@ func Search(scene *Image, template *Template, options Options) []Match {
 		}
 		scaled := template.resized(w, h)
 		factor := coarseFactor(w, h)
-		coarse, ok := coarseScenes[factor]
-		if !ok {
-			coarse = scene.downsampled(factor)
-			coarseScenes[factor] = coarse
-		}
-		for _, candidate := range coarseCandidates(coarse, scaled.downsampled(factor)) {
-			match := refine(scene, scaled, candidate, factor)
+		for _, candidate := range coarseCandidates(level(factor), scaled.downsampled(factor)) {
+			match := refineFrom(level, scaled, candidate, factor)
 			match.Scale = float64(w) / float64(template.W)
 			if match.Score > 0 {
 				found = append(found, match)
@@ -373,20 +382,27 @@ func Search(scene *Image, template *Template, options Options) []Match {
 	return found
 }
 
-// coarseFactor is how much the scene is downsampled for the first pass: enough
-// that the template is still recognizable (at least 12 px on its short side),
-// at most 4.
+// coarseFactor is how much the scene is downsampled for the first pass: the
+// coarse template keeps about 12 px on its short side — enough structure to
+// point at the right place (a 6 px icon is a blob, and a blob picks the wrong
+// neighbor) — and is a power of two so refineFrom can halve its way back to
+// full resolution. At most 16, so a huge template doesn't make the first pass
+// crawl.
 func coarseFactor(w, h int) int {
 	short := w
 	if h < short {
 		short = h
 	}
-	factor := short / 12
-	if factor < 1 {
-		factor = 1
+	target := short / 12
+	if target < 1 {
+		target = 1
 	}
-	if factor > 4 {
-		factor = 4
+	if target > 16 {
+		target = 16
+	}
+	factor := 1
+	for factor*2 <= target {
+		factor *= 2
 	}
 	return factor
 }
@@ -411,37 +427,70 @@ func coarseCandidates(scene *Image, template *Template) []candidate {
 	if radius < 2 {
 		radius = 2
 	}
-	var best []candidate
-	for y := 0; y <= scene.H-template.H; y++ {
-		for x := 0; x <= scene.W-template.W; x++ {
+	// Every other pixel is enough to find where to look: the best positions
+	// are then refined around, at this level, so a peak between two samples is
+	// not lost. A coarse template under 8 px has too few samples to stride.
+	stride := 2
+	if template.W < 8 || template.H < 8 {
+		stride = 1
+	}
+	// The sampled scores are only a guide: a sample next to the true peak can
+	// score far lower than the peak between samples, so nothing is suppressed
+	// yet. Keep the best sampled positions, refine each, and only then drop the
+	// ones that overlap a better one.
+	var sampled []candidate
+	for y := 0; y <= scene.H-template.H; y += stride {
+		for x := 0; x <= scene.W-template.W; x += stride {
 			score := correlation(scene, template, x, y)
 			if score <= 0 {
 				continue
 			}
-			// A kept candidate in the same neighborhood only blocks a weaker
-			// one: a better score replaces it, so the true peak of an area is
-			// not suppressed by a neighbor seen earlier.
-			blocked := false
-			for _, kept := range best {
-				if abs(kept.X-x) < radius && abs(kept.Y-y) < radius && kept.Score >= score {
-					blocked = true
-					break
-				}
-			}
-			if blocked {
+			if len(sampled) >= coarseKeep && score <= sampled[len(sampled)-1].Score {
 				continue
 			}
-			kept := best[:0]
-			for _, other := range best {
-				if abs(other.X-x) < radius && abs(other.Y-y) < radius {
-					continue
-				}
-				kept = append(kept, other)
+			sampled = append(sampled, candidate{X: x, Y: y, Score: score})
+			sort.SliceStable(sampled, func(i, j int) bool { return sampled[i].Score > sampled[j].Score })
+			if len(sampled) > coarseKeep {
+				sampled = sampled[:coarseKeep]
 			}
-			best = append(kept, candidate{X: x, Y: y, Score: score})
-			sort.SliceStable(best, func(i, j int) bool { return best[i].Score > best[j].Score })
-			if len(best) > candidatesPerScale {
-				best = best[:candidatesPerScale]
+		}
+	}
+	refined := make([]candidate, 0, len(sampled))
+	for _, at := range sampled {
+		refined = append(refined, bestAround(scene, template, at, stride))
+	}
+	sort.SliceStable(refined, func(i, j int) bool { return refined[i].Score > refined[j].Score })
+	kept := refined[:0]
+	for _, at := range refined {
+		overlaps := false
+		for _, other := range kept {
+			if abs(other.X-at.X) < radius && abs(other.Y-at.Y) < radius {
+				overlaps = true
+				break
+			}
+		}
+		if overlaps {
+			continue
+		}
+		kept = append(kept, at)
+		if len(kept) >= candidatesPerScale {
+			break
+		}
+	}
+	return kept
+}
+
+// bestAround refines a coarse candidate over ±radius pixels at its own level,
+// so a peak that fell between the strided samples is found.
+func bestAround(scene *Image, template *Template, at candidate, radius int) candidate {
+	best := at
+	maxX, maxY := scene.W-template.W, scene.H-template.H
+	for dy := -radius; dy <= radius; dy++ {
+		for dx := -radius; dx <= radius; dx++ {
+			x := clampToRange(at.X+dx, 0, maxX)
+			y := clampToRange(at.Y+dy, 0, maxY)
+			if score := correlation(scene, template, x, y); score > best.Score {
+				best = candidate{X: x, Y: y, Score: score}
 			}
 		}
 	}
@@ -450,36 +499,45 @@ func coarseCandidates(scene *Image, template *Template) []candidate {
 
 // refine searches at full resolution around a coarse candidate and returns its
 // best match.
-func refine(scene *Image, template *Template, at candidate, factor int) Match {
-	best := Match{X: at.X * factor, Y: at.Y * factor, W: template.W, H: template.H}
-	radius := factor
-	if radius < 1 {
-		radius = 1
-	}
-	maxX := scene.W - template.W
-	maxY := scene.H - template.H
-	for dy := -radius; dy <= radius; dy++ {
-		for dx := -radius; dx <= radius; dx++ {
-			x, y := at.X*factor+dx, at.Y*factor+dy
-			if x < 0 {
-				x = 0
-			}
-			if y < 0 {
-				y = 0
-			}
-			if x > maxX {
-				x = maxX
-			}
-			if y > maxY {
-				y = maxY
-			}
-			score := correlation(scene, template, x, y)
-			if score > best.Score {
-				best = Match{X: x, Y: y, W: template.W, H: template.H, Score: score}
+func refineFrom(levels func(int) *Image, template *Template, at candidate, factor int) Match {
+	// The candidate's position is where the coarse pass (at `factor`) saw the
+	// template; its true position is within one coarse pixel of it.
+	best := Match{X: at.X * factor, Y: at.Y * factor, W: template.W, H: template.H, Score: at.Score}
+	for level := factor / 2; level >= 1; level /= 2 {
+		scene := levels(level)
+		scaled := template.downsampled(level)
+		maxX := scene.W - scaled.W
+		maxY := scene.H - scaled.H
+		if maxX < 0 || maxY < 0 {
+			continue
+		}
+		// ±2 of this level's pixels covers the ±1 it was narrowed to at the
+		// coarser one, with room for rounding.
+		centerX, centerY := best.X/level, best.Y/level
+		bestX, bestY, bestScore := centerX, centerY, -1.0
+		for dy := -2; dy <= 2; dy++ {
+			for dx := -2; dx <= 2; dx++ {
+				x, y := centerX+dx, centerY+dy
+				x = clampToRange(x, 0, maxX)
+				y = clampToRange(y, 0, maxY)
+				if score := correlation(scene, scaled, x, y); score > bestScore {
+					bestX, bestY, bestScore = x, y, score
+				}
 			}
 		}
+		best = Match{X: bestX * level, Y: bestY * level, W: template.W, H: template.H, Score: bestScore}
 	}
 	return best
+}
+
+func clampToRange(value, low, high int) int {
+	if value < low {
+		return low
+	}
+	if value > high {
+		return high
+	}
+	return value
 }
 
 // correlation is normalized cross-correlation of the template with the scene

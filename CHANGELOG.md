@@ -51,14 +51,15 @@ semantic versioning.
   shadow root, a cross-origin frame. A grayscale correlation pyramid tries the
   common zoom and pixel ratios, reads a PNG's transparency as a mask, and
   reports `[image-not-found]` or `[image-ambiguous]` (`--nth` picks one, and
-  `--in <target>` searches inside one element only). Native engine only for
-  now.
+  `--in <target>` searches inside one element only). A strided coarse pass and
+  a halving refinement keep a find at tens of milliseconds and a miss under a
+  second. Native engine only for now.
 
 ### Known
 
 - The browser suite runs the Node engine by default and the native Go engine
   with `BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`: 32/32 on the Node
-  engine, 33/33 on the native one, where test 25 runs (`--image`).
+  engine (tests 25–26 skipped), 34/34 on the native one, where `--image` runs.
   `BROWSER_MCP_DAEMON=go` alone is the Go front door, which hands calls to the
   Node engine.
 
