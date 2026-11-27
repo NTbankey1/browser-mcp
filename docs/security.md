@@ -45,6 +45,11 @@ popup cuts every agent off.
 - **Upload** stages a copy of the file the AI app named in the engine's temp
   directory, hands the path to the page's file input, and keeps the copy for ten
   minutes so the page can read it when its form is submitted.
+- **`find --image` / `click --image`** read the template file through the same
+  file access as an upload (the MCP roots, `~` and absolute paths the user can
+  read). Point them only at pictures you would let the agent see; the template
+  itself never reaches the page, and the search runs in the engine over a
+  screenshot.
 - Files are read and written only under the MCP roots. Downloads are capped at
   25 MB per file.
 

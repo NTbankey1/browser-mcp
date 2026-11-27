@@ -788,12 +788,18 @@ func screenshot(ctx context.Context, tab *cdp.Tab, res Resolver, options screens
 		if err != nil {
 			return nil, err
 		}
-		var box struct {
-			X, Y, Width, Height float64
+		// Runtime.callFunctionOn answers {result: {value: …}}, not the value.
+		var reply struct {
+			Result struct {
+				Value struct {
+					X, Y, Width, Height float64
+				} `json:"value"`
+			} `json:"result"`
 		}
-		if err := json.Unmarshal(result, &box); err != nil {
+		if err := json.Unmarshal(result, &reply); err != nil {
 			return nil, err
 		}
+		box := reply.Result.Value
 		if box.Width == 0 || box.Height == 0 {
 			return nil, stepErrorf("The element has no visible box")
 		}

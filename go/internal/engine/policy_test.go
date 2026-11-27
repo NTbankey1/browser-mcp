@@ -21,6 +21,8 @@ func TestClassify(t *testing.T) {
 		{"Browser MCP doesn't allow Network.getCookies: it reaches other sites", CodeRefused},
 		{"evil.test isn't allowed: BROWSER_MCP_ALLOW_DOMAINS lists a.test", CodeRefused},
 		{"HTTP 404 for https://example.com/x", CodeHTTP},
+		{"The image paint.png wasn't found on screen: the best match scored 0.41", CodeImageNotFound},
+		{"The image matches 2 places; choose one with --nth 1-2 (top to bottom, left to right): (1,2) 0.98", CodeImageAmbiguous},
 		{"something else entirely", ""},
 	}
 	for _, c := range cases {
