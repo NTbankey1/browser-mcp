@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Fixed
 
+- `screenshot <target>` in the native engine always failed with "The element has
+  no visible box": it read Chrome's `Runtime.callFunctionOn` reply one level too
+  shallow, so the box was always zero. Fixed, and caught by test 25, which
+  captures a canvas to use as an image template.
 - A native dialog can no longer hang a call. Every step has a deadline (30 s
   unless it names one), the extension request stops with its caller instead of
   waiting on its own five-minute timer, and a step that fails because a dialog
@@ -42,11 +46,18 @@ semantic versioning.
 - `session save <file>` / `session restore <file>`: keep an AI app's tabs (URLs
   and the current one) across calls. Restore opens them again and honours the
   allowlist.
+- `find --image <file>` / `click --image <file>`: find a picture on screen and
+  click its center, for controls no selector can name — a canvas, a closed
+  shadow root, a cross-origin frame. A grayscale correlation pyramid tries the
+  common zoom and pixel ratios, reads a PNG's transparency as a mask, and
+  reports `[image-not-found]` or `[image-ambiguous]` (`--nth` picks one).
+  Native engine only for now.
 
 ### Known
 
 - The browser suite runs the Node engine by default and the native Go engine
-  with `BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`; both pass 32/32.
+  with `BROWSER_MCP_DAEMON=go BROWSER_MCP_ENGINE=native`: 32/32 on the Node
+  engine, 33/33 on the native one, where test 25 runs (`--image`).
   `BROWSER_MCP_DAEMON=go` alone is the Go front door, which hands calls to the
   Node engine.
 

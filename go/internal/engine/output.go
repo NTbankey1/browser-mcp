@@ -39,12 +39,20 @@ const (
 	CodeDisconnected = "disconnected"
 	CodeRefused      = "refused"
 	CodeVisualDiff   = "visual-diff"
+	// CodeImageNotFound: `find --image` and `click --image` found no match.
+	CodeImageNotFound = "image-not-found"
+	// CodeImageAmbiguous: several places match the image about equally.
+	CodeImageAmbiguous = "image-ambiguous"
 )
 
 // classify picks the code for a message, or "" when it fits none.
 func classify(message string) string {
 	lower := strings.ToLower(message)
 	switch {
+	case strings.Contains(lower, "wasn't found on screen"):
+		return CodeImageNotFound
+	case strings.Contains(lower, "the image matches"):
+		return CodeImageAmbiguous
 	case strings.Contains(lower, "no element"), strings.Contains(lower, "waiting for locator"), strings.Contains(lower, "there's no "), strings.Contains(lower, "nothing matches"):
 		return CodeNoElement
 	case strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "timed out"), strings.Contains(lower, "timeout"), strings.Contains(lower, "didn't answer"):
